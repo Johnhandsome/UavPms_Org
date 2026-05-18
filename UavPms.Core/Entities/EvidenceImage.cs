@@ -1,4 +1,3 @@
-using System;
 using UavPms.Core.Common;
 
 namespace UavPms.Core.Entities;
