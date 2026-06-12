@@ -12,10 +12,6 @@ using UavPms.Infrastructure.Persistence;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Hỗ trợ cấu hình cục bộ (chứa Secrets không đẩy lên Git)
-builder.Configuration.AddJsonFile("appsettings.local.json", optional: true, reloadOnChange: true);
-builder.Configuration.AddJsonFile($"appsettings.{builder.Environment.EnvironmentName}.local.json", optional: true, reloadOnChange: true);
-
 // Cấu hình Serilog in ra Console   
 builder.Host.UseSerilog((context, loggerConfig) =>
 {

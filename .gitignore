@@ -485,7 +485,3 @@ $RECYCLE.BIN/
 
 # Local storage directories
 UavPms.WebApi/uav_storage/
-
-# Local settings overrides (Secrets)
-UavPms.WebApi/appsettings.local.json
-UavPms.WebApi/appsettings.*.local.json
