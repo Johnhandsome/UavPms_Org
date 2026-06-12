@@ -14,6 +14,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<AppUser> Users => Set<AppUser>();
     public DbSet<AppRole> Roles => Set<AppRole>();
     public DbSet<UserRole> UserRoles => Set<UserRole>();
+    public DbSet<Notification> Notifications => Set<Notification>();
     
     public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options) : base(options) {}
     
