@@ -1,25 +1,36 @@
 using System;
 using System.IO;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
 namespace UavPms.WebApi.Jobs;
 
-public class CleanupJob
+public class CleanupJob(ILogger<CleanupJob> logger, IConfiguration configuration)
 {
-    private readonly ILogger<CleanupJob> _logger;
-
-    public CleanupJob(ILogger<CleanupJob> logger)
-    {
-        _logger = logger;
-    }
+    private readonly ILogger<CleanupJob> _logger = logger;
+    private readonly IConfiguration _configuration = configuration;
 
     public Task Execute()
     {
         _logger.LogInformation("Auto-Cleanup job started: Purging temporary files and logs older than 30 days...");
 
-        // Simulate file/log purging in the storage folder
-        var imagePath = "/home/an/uav_storage/images";
+        var imagePath = _configuration["FileStorage:AlertImagesPath"] ?? Path.Combine(Directory.GetCurrentDirectory(), "uav_storage", "images");
+        
+        try
+        {
+            if (!string.IsNullOrEmpty(_configuration["FileStorage:AlertImagesPath"]))
+            {
+                var dir = new DirectoryInfo(imagePath);
+                // Thử check xem có quyền truy cập không
+                _ = dir.GetFiles();
+            }
+        }
+        catch
+        {
+            imagePath = Path.Combine(Directory.GetCurrentDirectory(), "uav_storage", "images");
+        }
+
         try
         {
             if (Directory.Exists(imagePath))
