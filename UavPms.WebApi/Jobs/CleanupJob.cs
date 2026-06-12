@@ -22,7 +22,7 @@ public class CleanupJob(ILogger<CleanupJob> logger, IConfiguration configuration
             if (!string.IsNullOrEmpty(_configuration["FileStorage:AlertImagesPath"]))
             {
                 var dir = new DirectoryInfo(imagePath);
-                // Thử check xem có quyền truy cập không
+
                 _ = dir.GetFiles();
             }
         }
