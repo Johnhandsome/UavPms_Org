@@ -1,15 +1,13 @@
-using UavPms.Core.Common;
+using System;
 
 namespace UavPms.Core.Entities;
 
-public class UserRole : BaseEntity
+public class UserRole
 {
-    // Khóa ngoại trỏ về App User 
     public Guid UserId { get; set; }
-    // Khóa ngoại trỏ về App Role   
-    public Guid RoleId { get; set; }
-    
-    // Navigation Property
-    public virtual AppUser? User { get; set; }
-    public virtual AppRole? Role { get; set; }
+    public int RoleId { get; set; }
+    public DateTime AssignedAt { get; set; } = DateTime.UtcNow;
+
+    public virtual User? User { get; set; }
+    public virtual Role? Role { get; set; }
 }
