@@ -54,14 +54,14 @@
   - `AuditLog` (PK: `log_id` / `Id`, `UserId` FK, `table_name`, `record_id` uuid, `action_type`, `old_values` JSONB, `new_values` JSONB, `ip_address`, `user_agent`, `created_at`).
 
 ### Phase 1.2: Thiết lập Fluent API & Migration (PostgreSQL + PostGIS)
-- [ ] 11. **Cập nhật `ApplicationDbContext.cs`**: Đăng ký lại toàn bộ các `DbSet<T>` tương ứng với các thực thể mới cấu hình.
-- [ ] 12. **Cấu hình Fluent API cho GIS (PostGIS)**: Sử dụng NetTopologySuite để cấu hình cột địa không gian `geom` cho các thực thể `Region`, `Substation`, `TransmissionLine`, `Tower`, `Uav`, và `InspectionMedia`. Thiết lập Spatial Index (GiST index) để tối ưu hoá các câu truy vấn không gian.
-- [ ] 13. **Cấu hình Fluent API cho cột JSONB**: Cấu hình các trường `gps_track` (`MissionFlightLog`), `bounding_box` (`DetectedAnomaly`), `calculation_log` (`AssetHealthHistory`), và `old_values` / `new_values` (`AuditLog`) lưu trữ dưới định dạng `jsonb` của Postgres.
-- [ ] 14. **Thiết lập ràng buộc & Index**:
+- [x] 11. **Cập nhật `ApplicationDbContext.cs`**: Đăng ký lại toàn bộ các `DbSet<T>` tương ứng với các thực thể mới cấu hình.
+- [x] 12. **Cấu hình Fluent API cho GIS (PostGIS)**: Sử dụng NetTopologySuite để cấu hình cột địa không gian `geom` cho các thực thể `Region`, `Substation`, `TransmissionLine`, `Tower`, `Uav`, và `InspectionMedia`. Thiết lập Spatial Index (GiST index) để tối ưu hoá các câu truy vấn không gian.
+- [x] 13. **Cấu hình Fluent API cho cột JSONB**: Cấu hình các trường `gps_track` (`MissionFlightLog`), `bounding_box` (`DetectedAnomaly`), `calculation_log` (`AssetHealthHistory`), và `old_values` / `new_values` (`AuditLog`) lưu trữ dưới định dạng `jsonb` của Postgres.
+- [x] 14. **Thiết lập ràng buộc & Index**:
   - Đảm bảo các mã code như `uav_code`, `mission_code`, `ticket_code`, `tower_code`, `asset_code`, `category_code` là Unique.
   - Cấu hình khoá ngoại, ràng buộc xoá (Restrict thay vì Cascade ở các quan hệ quan trọng để tránh mất mát dữ liệu asset).
-- [ ] 15. **Global Query Filter cho Soft Delete**: Thiết lập filter tự động `IsDeleted == false` cho tất cả các thực thể thừa kế từ `BaseEntity`.
-- [ ] 16. **Tạo Migration sạch**: Xoá lịch sử Migrations cũ bị lỗi thời, chạy lệnh tạo Migration mới tinh `InitUavPmsSchema` và cập nhật cơ sở dữ liệu Postgres.
+- [x] 15. **Global Query Filter cho Soft Delete**: Thiết lập filter tự động `IsDeleted == false` cho tất cả các thực thể thừa kế từ `BaseEntity`.
+- [x] 16. **Tạo Migration sạch**: Xoá lịch sử Migrations cũ bị lỗi thời, chạy lệnh tạo Migration mới tinh `InitUavPmsSchema` và cập nhật cơ sở dữ liệu Postgres.
 
 ---
 
