@@ -3,6 +3,10 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using UavPms.Infrastructure.Persistence;
 using UavPms.Infrastructure.Messaging;
+using UavPms.Core.Interfaces.Repositories;
+using UavPms.Infrastructure.Repositories;
+using UavPms.Core.Interfaces.Services;
+using UavPms.Infrastructure.Services;
 
 namespace UavPms.Infrastructure;
 
@@ -20,6 +24,15 @@ public static class DependencyInjection
         
         // Đăng ký RabbitMQ Connection helper dưới dạng Singleton
         services.AddSingleton<RabbitMqConnection>();
+
+        // Đăng ký Unit of Work và Generic Repository
+        services.AddScoped<IUnitOfWork, UnitOfWork>();
+        services.AddScoped(typeof(IGenericRepository<>), typeof(GenericRepository<>));
+        services.AddScoped<IUserRepository, UserRepository>();
+
+        // Đăng ký Password Hasher và JWT Provider
+        services.AddScoped<IPasswordHasher, BCryptPasswordHasher>();
+        services.AddScoped<IJwtProvider, JwtProvider>();
         
         return services;
     }

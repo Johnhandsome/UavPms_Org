@@ -68,14 +68,14 @@
 ## EPIC 2: HOÀN THIỆN APPLICATION LAYER & HẠ TẦNG CƠ SỞ
 
 ### Phase 2.1: Base Services & Repositories
-- [ ] 17. **Cập nhật Generic Repository & Unit of Work**: Khớp cấu trúc DbContext mới, hỗ trợ truy vấn không đồng bộ và tự động tracking.
+- [x] 17. **Cập nhật Generic Repository & Unit of Work**: Khớp cấu trúc DbContext mới, hỗ trợ truy vấn không đồng bộ và tự động tracking.
 - [ ] 18. **Dịch vụ Repositories Đặc thù**:
   - `ITowerRepository` & `IAssetRepository`: Các hàm truy vấn không gian phức tạp.
   - `IAnomalyRepository` & `IMaintenanceTicketRepository`: Hỗ trợ nạp eager loading các thực thể liên quan (Media, Category, User).
 - [ ] 19. **MediatR Pipeline Behaviors**:
   - Triển khai `ValidationBehavior` tích hợp FluentValidation tự động validate đầu vào của Request Command trước khi vào Handler.
   - Triển khai `LoggingBehavior` tự động ghi nhận nhật ký (NLog/Serilog) cho mỗi API Request/Response.
-- [ ] 20. **Security & Cryptography**:
+- [x] 20. **Security & Cryptography**:
   - Triển khai `BCryptPasswordHasher` để mã hoá bảo mật mật khẩu người dùng.
   - Triển khai `JwtProvider` sinh JWT Token đính kèm Claims chi tiết (UserId, Username, Roles).
 - [ ] 21. **Current User Service**: Viết `CurrentUserService` lấy thông tin `UserId` và `Roles` từ `HttpContext.User` của HTTP request hiện tại.
@@ -85,7 +85,8 @@
 ## EPIC 3: NGHIỆP VỤ XÁC THỰC, PHÂN QUYỀN & AUDIT LOG (Identity & Audit)
 
 ### Phase 3.1: API Xác thực & Phân quyền (RBAC)
-- [ ] 22. **Lệnh Đăng nhập (`LoginCommand`)**: Kiểm tra tài khoản, đối chiếu hash mật khẩu, trả về JWT Token và thông tin phân quyền.
+- [x] 22. **Lệnh Đăng nhập (`LoginCommand` / `POST /login`)**: Kiểm tra tài khoản, đối chiếu hash mật khẩu, trả về Access Token và Refresh Token.
+- [x] 22b. **Lệnh Làm mới Token (`RefreshTokenCommand` / `POST /refresh-token`)**: Kiểm tra Refresh Token còn hạn trong database để cấp lại cặp token mới và hỗ trợ thu hồi.
 - [ ] 23. **Truy vấn Profile cá nhân (`GetMyProfileQuery`)**: Lấy thông tin tài khoản hiện tại dựa trên token gửi lên.
 - [ ] 24. **Cấu hình JwtBearerAuthentication**: Đăng ký Middleware xác thực JWT trong `Program.cs`. Thiết lập các Policy bảo vệ API dựa trên các vai trò: `SystemAdmin`, `Manager`, `Inspector`, `Analyst`, `Technician`.
 

@@ -1,4 +1,9 @@
 using Microsoft.EntityFrameworkCore;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Linq.Expressions;
+using System.Threading.Tasks;
 using UavPms.Core.Interfaces.Repositories;
 using UavPms.Infrastructure.Persistence;
 
@@ -13,26 +18,61 @@ public class GenericRepository<T> : IGenericRepository<T> where T : class
         _context = context;
     }
 
-    public async Task<T> GetByIdAsync(Guid id)
+    public async Task<T?> GetByIdAsync(Guid id, bool track = true)
     {
-        return await _context.Set<T>().FindAsync(id);
+        if (track)
+        {
+            return await _context.Set<T>().FindAsync(id);
+        }
+        else
+        {
+            var entity = await _context.Set<T>().FindAsync(id);
+            if (entity != null)
+            {
+                _context.Entry(entity).State = EntityState.Detached;
+            }
+            return entity;
+        }
     }
 
-    public async Task<IReadOnlyList<T>> GetAllAsync()
+    public async Task<IReadOnlyList<T>> GetAllAsync(bool track = false)
     {
-        return await _context.Set<T>().ToListAsync();
+        return track 
+            ? await _context.Set<T>().ToListAsync()
+            : await _context.Set<T>().AsNoTracking().ToListAsync();
+    }
+
+    public async Task<IReadOnlyList<T>> FindAsync(Expression<Func<T, bool>> predicate, bool track = false)
+    {
+        return track
+            ? await _context.Set<T>().Where(predicate).ToListAsync()
+            : await _context.Set<T>().AsNoTracking().Where(predicate).ToListAsync();
     }
 
     public async Task<T> AddAsync(T entity)
     {
         await _context.Set<T>().AddAsync(entity);
-        await _context.SaveChangesAsync();
         return entity;
     }
 
-    public async Task UpdateAsync(T entity)
+    public Task UpdateAsync(T entity)
     {
         _context.Entry(entity).State = EntityState.Modified;
-        await _context.SaveChangesAsync();
+        return Task.CompletedTask;
+    }
+
+    public Task DeleteAsync(T entity)
+    {
+        if (entity is UavPms.Core.Common.BaseEntity baseEntity)
+        {
+            baseEntity.IsDeleted = true;
+            baseEntity.DeletedAt = DateTime.UtcNow;
+            _context.Entry(entity).State = EntityState.Modified;
+        }
+        else
+        {
+            _context.Set<T>().Remove(entity);
+        }
+        return Task.CompletedTask;
     }
 }
