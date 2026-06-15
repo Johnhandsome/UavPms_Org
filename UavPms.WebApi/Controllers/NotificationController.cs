@@ -29,7 +29,12 @@ public class NotificationController : ControllerBase
             return BadRequest("UserId is required.");
         }
 
-        var notifications = await _notificationRepository.GetByUserAsync(userId);
+        if (!Guid.TryParse(userId, out var userGuid))
+        {
+            return BadRequest("Invalid UserId format.");
+        }
+
+        var notifications = await _notificationRepository.GetByUserAsync(userGuid);
         return Ok(notifications);
     }
 
@@ -61,10 +66,10 @@ public class NotificationController : ControllerBase
             notification.Id = Guid.NewGuid();
         }
         
-        notification.CreatedAt = DateTime.UtcNow;
+        notification.SentAt = DateTime.UtcNow;
         notification.IsRead = false;
 
         await _notificationRepository.AddAsync(notification);
-        return CreatedAtAction(nameof(GetHistory), new { userId = notification.UserId }, notification);
+        return CreatedAtAction(nameof(GetHistory), new { userId = notification.UserId.ToString() }, notification);
     }
 }

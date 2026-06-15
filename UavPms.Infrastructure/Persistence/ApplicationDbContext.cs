@@ -6,46 +6,70 @@ namespace UavPms.Infrastructure.Persistence;
 
 public class ApplicationDbContext : DbContext
 {
-    public DbSet<Drone> Drones => Set<Drone>();
-    public DbSet<DroneTelemetry> DroneTelemetries => Set<DroneTelemetry>();
-    public DbSet<DetectionAlert> DetectionAlerts => Set<DetectionAlert>();
-    public DbSet<EvidenceImage> EvidenceImages => Set<EvidenceImage>();
-    
-    public DbSet<AppUser> Users => Set<AppUser>();
-    public DbSet<AppRole> Roles => Set<AppRole>();
+    public DbSet<User> Users => Set<User>();
+    public DbSet<Role> Roles => Set<Role>();
     public DbSet<UserRole> UserRoles => Set<UserRole>();
+    public DbSet<Region> Regions => Set<Region>();
+    public DbSet<Substation> Substations => Set<Substation>();
+    public DbSet<TransmissionLine> TransmissionLines => Set<TransmissionLine>();
+    public DbSet<Tower> Towers => Set<Tower>();
+    public DbSet<Asset> Assets => Set<Asset>();
+    public DbSet<AssetHealthHistory> AssetHealthHistories => Set<AssetHealthHistory>();
+    public DbSet<Uav> Uavs => Set<Uav>();
+    public DbSet<Mission> Missions => Set<Mission>();
+    public DbSet<MissionTargetLine> MissionTargetLines => Set<MissionTargetLine>();
+    public DbSet<MissionFlightLog> MissionFlightLogs => Set<MissionFlightLog>();
+    public DbSet<InspectionMedia> InspectionMedia => Set<InspectionMedia>();
+    public DbSet<DefectCategory> DefectCategories => Set<DefectCategory>();
+    public DbSet<DetectedAnomaly> DetectedAnomalies => Set<DetectedAnomaly>();
+    public DbSet<EmergencyAlert> EmergencyAlerts => Set<EmergencyAlert>();
+    public DbSet<AlertEscalation> AlertEscalations => Set<AlertEscalation>();
+    public DbSet<IncidentReport> IncidentReports => Set<IncidentReport>();
+    public DbSet<MaintenanceTicket> MaintenanceTickets => Set<MaintenanceTicket>();
+    public DbSet<MaintenanceProof> MaintenanceProofs => Set<MaintenanceProof>();
+    public DbSet<MaterialLog> MaterialLogs => Set<MaterialLog>();
     public DbSet<Notification> Notifications => Set<Notification>();
-    
+    public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
+
     public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options) : base(options) {}
-    
-    // Tự động quét và nạp các file Configuration
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(ApplicationDbContext).Assembly);
+
+        // Apply Global Soft Delete Query Filter for BaseEntity descendants
+        foreach (var entityType in modelBuilder.Model.GetEntityTypes())
+        {
+            if (typeof(BaseEntity).IsAssignableFrom(entityType.ClrType))
+            {
+                modelBuilder.Entity(entityType.ClrType).HasQueryFilter((dynamic)CreateFilterExpression(entityType.ClrType));
+            }
+        }
     }
-    
-    // Ghi đè hàm SaveChangesAsync để tự động điền Audit Log (thời gian sửa/ tạo/...)
+
+    private static object CreateFilterExpression(Type type)
+    {
+        var parameter = System.Linq.Expressions.Expression.Parameter(type, "e");
+        var property = System.Linq.Expressions.Expression.Property(parameter, nameof(BaseEntity.IsDeleted));
+        var notExpression = System.Linq.Expressions.Expression.Not(property);
+        return System.Linq.Expressions.Expression.Lambda(notExpression, parameter);
+    }
+
     public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
-        // ChangeTracker sẽ lùng sục tất cả các Entity đang chuẩn bị được lưu vào DB
         foreach (var entry in ChangeTracker.Entries<BaseEntity>())
         {
             switch (entry.State)
             {
-                // Nếu là lệnh INSERT (Thêm mới)
                 case EntityState.Added:
                     entry.Entity.CreatedAt = DateTime.UtcNow;
                     break;
-                
-                // Nếu là lệnh UPDATE 
                 case EntityState.Modified:
                     entry.Entity.UpdatedAt = DateTime.UtcNow;
                     break;
             }
         }
-        
-        // Sau khi kiểm tra qua tất cả dữ liệu, gọi hàm gốc của EF Core để thực thi lưu xuống DB
         return base.SaveChangesAsync(cancellationToken);
     }
 }

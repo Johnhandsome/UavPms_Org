@@ -13,7 +13,9 @@ public static class DependencyInjection
         // Truyền Connection String vào cấu hình UseNpgsql
         services.AddDbContext<ApplicationDbContext>(options =>
         {
-            options.UseNpgsql(configuration.GetConnectionString("DefaultConnection"));
+            options.UseNpgsql(
+                configuration.GetConnectionString("DefaultConnection"),
+                o => o.UseNetTopologySuite());
         });
         
         // Đăng ký RabbitMQ Connection helper dưới dạng Singleton
