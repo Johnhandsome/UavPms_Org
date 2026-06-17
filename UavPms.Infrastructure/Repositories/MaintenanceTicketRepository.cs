@@ -11,14 +11,14 @@ public class MaintenanceTicketRepository : GenericRepository<MaintenanceTicket>,
     {
     }
 
-    public async Task<MaintenanceTicket> GetByIdWithDetailsAsync(Guid id)
+    public async Task<MaintenanceTicket?> GetByIdWithDetailsAsync(Guid id)
     {
         return await _context.MaintenanceTickets
             .Include(t => t.Asset)
-            .Include(t => t.Anomaly)
-            .ThenInclude(a => a.Media)
-            .Include(t => t.Anomaly)
-            .ThenInclude(a => a.Category)
+            .Include(t => t.Anomaly!)
+                .ThenInclude(a => a.Media)
+            .Include(t => t.Anomaly!)
+                .ThenInclude(a => a.Category)
             .Include(t => t.Manager)
             .Include(t => t.Technician)
             .Include(t => t.MaterialLogs)
@@ -30,10 +30,10 @@ public class MaintenanceTicketRepository : GenericRepository<MaintenanceTicket>,
     {
         return await _context.MaintenanceTickets
             .Include(t => t.Asset)
-            .Include(t => t.Anomaly)
-            .ThenInclude(a => a.Media)
-            .Include(t => t.Anomaly)
-            .ThenInclude(a => a.Category)
+            .Include(t => t.Anomaly!)
+                .ThenInclude(a => a.Media)
+            .Include(t => t.Anomaly!)
+                .ThenInclude(a => a.Category)
             .Include(t => t.Manager)
             .Include(t => t.Technician)
             .Include(t => t.MaterialLogs)
@@ -55,8 +55,8 @@ public class MaintenanceTicketRepository : GenericRepository<MaintenanceTicket>,
     {
         return await _context.MaintenanceTickets
             .Include(t => t.Asset)
-            .Include(t => t.Anomaly)
-            .ThenInclude(a => a.Category)
+            .Include(t => t.Anomaly!)
+                .ThenInclude(a => a.Category)
             .Include(t => t.Manager)
             .Include(t => t.Technician)
             .Where(t => t.TechnicianId == technicianId)

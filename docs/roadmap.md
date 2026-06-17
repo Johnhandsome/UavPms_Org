@@ -69,7 +69,7 @@
 
 ### Phase 2.1: Base Services & Repositories
 - [x] 17. **Cập nhật Generic Repository & Unit of Work**: Khớp cấu trúc DbContext mới, hỗ trợ truy vấn không đồng bộ và tự động tracking.
-- [ ] 18. **Dịch vụ Repositories Đặc thù**:
+- [X] 18. **Dịch vụ Repositories Đặc thù**:
   - `ITowerRepository` & `IAssetRepository`: Các hàm truy vấn không gian phức tạp.
   - `IAnomalyRepository` & `IMaintenanceTicketRepository`: Hỗ trợ nạp eager loading các thực thể liên quan (Media, Category, User).
 - [ ] 19. **MediatR Pipeline Behaviors**:

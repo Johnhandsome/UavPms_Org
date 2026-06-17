@@ -28,7 +28,7 @@ public class AssetRepository : GenericRepository<Asset>, IAssetRepository
             .ToListAsync();
     }
 
-    public async Task<IReadOnlyList<Asset>> GetAssetsWithinDistance(double latitude, double longitude, double distanceInMeters)
+    public async Task<IReadOnlyList<Asset>> GetAssetsWithinDistanceAsync(double latitude, double longitude, double distanceInMeters)
     {
         return await _context.Assets
             .FromSqlInterpolated($@"
