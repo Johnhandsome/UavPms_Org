@@ -75,7 +75,7 @@ if (app.Environment.IsDevelopment())
     using var scope = app.Services.CreateScope();
     var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
     dbContext.Database.Migrate();
-    DatabaseSeeder.SeedAsync(dbContext).GetAwaiter().GetResult();
+    await DatabaseSeeder.SeedAsync(dbContext);
 }
 
 // Đăng ký các Hangfire Recurring Jobs

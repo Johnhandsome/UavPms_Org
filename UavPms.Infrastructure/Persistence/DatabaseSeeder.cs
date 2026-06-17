@@ -37,8 +37,9 @@ public static class DatabaseSeeder
             var adminUser = await context.Users.FirstOrDefaultAsync(u => u.Username == "admin");
             if (adminUser == null)
             {
-                // Password 'admin' hashed with BCrypt
-                var passwordHash = BCrypt.Net.BCrypt.HashPassword("admin", 10);
+                var adminPassword = Environment.GetEnvironmentVariable("UAVPMS_ADMIN_PASSWORD")
+                     ?? throw new InvalidOperationException("Missing UAVPMS_ADMIN_PASSWORD environment variable for seeding default admin user.");
+                var passwordHash = BCrypt.Net.BCrypt.HashPassword(adminPassword, 10);
 
                 var newAdmin = new User
                 {

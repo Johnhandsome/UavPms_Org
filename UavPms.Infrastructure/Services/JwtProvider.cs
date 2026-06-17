@@ -22,9 +22,12 @@ public class JwtProvider : IJwtProvider
 
     public string GenerateAccessToken(User user, IList<string> roles)
     {
-        var secretKey = _configuration["Jwt:SecretKey"] ?? "super_secret_key_that_is_long_enough_to_be_secure_1234567890";
-        var issuer = _configuration["Jwt:Issuer"] ?? "UavPmsServer";
-        var audience = _configuration["Jwt:Audience"] ?? "UavPmsClient";
+        var secretKey = _configuration["Jwt:SecretKey"]
+            ?? throw new InvalidOperationException("Jwt:SecretKey is not configured.");
+        var issuer = _configuration["Jwt:Issuer"]
+            ?? throw new InvalidOperationException("Jwt:Issuer is not configured.");
+        var audience = _configuration["Jwt:Audience"]
+            ?? throw new InvalidOperationException("Jwt:Audience is not configured.");
         var expiryMinutesStr = _configuration["Jwt:ExpiryMinutes"] ?? "60";
         double.TryParse(expiryMinutesStr, out var expiryMinutes);
         if (expiryMinutes <= 0) expiryMinutes = 60;
