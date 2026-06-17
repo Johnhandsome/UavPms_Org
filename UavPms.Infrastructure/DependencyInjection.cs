@@ -19,7 +19,13 @@ public static class DependencyInjection
         {
             options.UseNpgsql(
                 configuration.GetConnectionString("DefaultConnection"),
-                o => o.UseNetTopologySuite());
+                o => {
+                    o.UseNetTopologySuite();
+                    o.EnableRetryOnFailure(
+                        maxRetryCount: 5,
+                        maxRetryDelay: TimeSpan.FromSeconds(30),
+                        errorCodesToAdd: null);
+                });
         });
         
         // Đăng ký RabbitMQ Connection helper dưới dạng Singleton

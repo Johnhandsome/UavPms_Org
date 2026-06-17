@@ -33,13 +33,15 @@ builder.Services.AddHostedService<MissionCreatedConsumer>();
 builder.Services.AddHostedService<DefectDetectedConsumer>();
 
 //Hangfire
-builder.Services.AddHangfire(config =>
-{
-    config.UsePostgreSqlStorage(options =>
-        options.UseNpgsqlConnection(builder.Configuration.GetConnectionString("DefaultConnection")));
-});
+//builder.Services.AddHangfire(config =>
+//{
+//    config.UsePostgreSqlStorage(options =>
+//        options.UseNpgsqlConnection(builder.Configuration.GetConnectionString("DefaultConnection")));
+//});
 
-builder.Services.AddHangfireServer();
+//builder.Services.AddHangfireServer();
+
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 
 // CẤU HÌNH CORS POLICY 
 builder.Services.AddCors(options =>
@@ -64,10 +66,10 @@ if (app.Environment.IsDevelopment())
 }
 
 // Hangfire Dashboard (Development-only for security)
-if (app.Environment.IsDevelopment())
-{
-    app.UseHangfireDashboard();
-}
+// if (app.Environment.IsDevelopment())
+// {
+//     app.UseHangfireDashboard();
+// }
 
 // Tự động chạy Migration khi khởi động (dev-only)
 if (app.Environment.IsDevelopment())
@@ -79,20 +81,20 @@ if (app.Environment.IsDevelopment())
 }
 
 // Đăng ký các Hangfire Recurring Jobs
-using (var scope = app.Services.CreateScope())
-{
-    var recurringJobManager = scope.ServiceProvider.GetRequiredService<IRecurringJobManager>();
-    
-    recurringJobManager.AddOrUpdate<CleanupJob>(
-        "auto-cleanup-job",
-        job => job.Execute(),
-        Cron.Daily);
+// using (var scope = app.Services.CreateScope())
+// {
+//     var recurringJobManager = scope.ServiceProvider.GetRequiredService<IRecurringJobManager>();
+//     
+//     recurringJobManager.AddOrUpdate<CleanupJob>(
+//         "auto-cleanup-job",
+//         job => job.Execute(),
+//         Cron.Daily);
 
-    recurringJobManager.AddOrUpdate<DailySummaryJob>(
-        "daily-summary-job",
-        job => job.Execute(),
-        Cron.Daily);
-}
+//     recurringJobManager.AddOrUpdate<DailySummaryJob>(
+//         "daily-summary-job",
+//         job => job.Execute(),
+//         Cron.Daily);
+// }
 
 app.UseHttpsRedirection();
 
