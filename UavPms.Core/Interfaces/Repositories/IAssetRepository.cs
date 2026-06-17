@@ -4,6 +4,6 @@ namespace UavPms.Core.Interfaces.Repositories;
 
 public interface IAssetRepository : IGenericRepository<Asset>
 {
-    Task<IReadOnlyList<Asset>> GetAllAssetsInBoundingBoxAsync(double latitude, double longitude);
-    Task<IReadOnlyList<Asset>> GetAssetsWithinDistance(double latitude, double longitude);
+    Task<IReadOnlyList<Asset>> GetAssetsInBoundingBoxAsync(double minLat, double minLng, double maxLat, double maxLng);
+    Task<IReadOnlyList<Asset>> GetAssetsWithinDistance(double latitude, double longitude, double distanceInMeters);
 }
