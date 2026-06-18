@@ -36,10 +36,10 @@ public static class DependencyInjection
         services.AddScoped(typeof(IGenericRepository<>), typeof(GenericRepository<>));
         services.AddScoped<IUserRepository, UserRepository>();
         
-        // Đăng ký các Repoositories đặc thù 
+        // Đăng ký các Repositories đặc thù 
         services.AddScoped<ITowerRepository, TowerRepository>();
         services.AddScoped<IAssetRepository, AssetRepository>();
-        services.AddScoped<IAnomalyRepository, AnomalyRepsitory>();
+        services.AddScoped<IAnomalyRepository, AnomalyRepository>();
         services.AddScoped<IMaintenanceTicketRepository, MaintenanceTicketRepository>();
         
         // Đăng ký Password Hasher và JWT Provider

@@ -3,13 +3,16 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using System.Security.Cryptography;
+using System.Text;
 using UavPms.Core.Entities;
 using UavPms.Core.Interfaces.Repositories;
 using UavPms.Core.Interfaces.Services;
+
 namespace UavPms.WebApi.Controllers;
 
 [ApiController]
-[Route("api")]
+[Route("api/v1/auth")]
 public class AuthController : ControllerBase
 {
     private readonly IUserRepository _userRepository;
@@ -27,6 +30,12 @@ public class AuthController : ControllerBase
         _passwordHasher = passwordHasher;
         _jwtProvider = jwtProvider;
         _unitOfWork = unitOfWork;
+    }
+    
+    private static string HashToken(string token){
+        var bytes = Encoding.UTF8.GetBytes(token);
+        var hashBytes = SHA256.HashData(bytes);
+        return Convert.ToBase64String(hashBytes);
     }
 
     /// <summary>
@@ -79,7 +88,8 @@ public class AuthController : ControllerBase
             return BadRequest("Refresh Token is required.");
         }
 
-        var users = await _userRepository.FindAsync(u => u.RefreshToken == request.RefreshToken, track: true);
+        var hashedToken = HashToken(request.RefreshToken);
+        var users = await _userRepository.FindAsync(u => u.RefreshToken == hashedToken, track: true);
         var user = users.FirstOrDefault();
 
         if (user == null || user.IsDeleted || user.Status != "Active")
@@ -87,7 +97,7 @@ public class AuthController : ControllerBase
             return Unauthorized("Invalid refresh token.");
         }
 
-        if (user.RefreshTokenExpiryTime <= DateTime.UtcNow)
+        if (user.RefreshTokenExpiryTime == null ||user.RefreshTokenExpiryTime <= DateTime.UtcNow)
         {
             return Unauthorized("Refresh token has expired.");
         }
@@ -98,7 +108,7 @@ public class AuthController : ControllerBase
         var newAccessToken = _jwtProvider.GenerateAccessToken(user, roles);
         var newRefreshToken = _jwtProvider.GenerateRefreshToken();
 
-        user.RefreshToken = newRefreshToken;
+        user.RefreshToken = HashToken(newRefreshToken);
         user.RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(7);
         await _unitOfWork.SaveChangesAsync();
 
@@ -111,4 +121,4 @@ public class AuthController : ControllerBase
 }
 
 public record LoginRequest(string Username, string Password);
-public record RefreshTokenRequest(string RefreshToken);
+public record RefreshTokenRequest(string RefreshToken, string? AccessToken);

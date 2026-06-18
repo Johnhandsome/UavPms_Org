@@ -5,9 +5,9 @@ using UavPms.Infrastructure.Persistence;
 
 namespace UavPms.Infrastructure.Repositories;
 
-public class AnomalyRepsitory : GenericRepository<DetectedAnomaly>, IAnomalyRepository
+public class AnomalyRepository : GenericRepository<DetectedAnomaly>, IAnomalyRepository
 {
-    public AnomalyRepsitory(ApplicationDbContext context) : base(context)
+    public AnomalyRepository(ApplicationDbContext context) : base(context)
     {
     }
 
