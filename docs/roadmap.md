@@ -72,13 +72,13 @@
 - [X] 18. **Dịch vụ Repositories Đặc thù**:
   - `ITowerRepository` & `IAssetRepository`: Các hàm truy vấn không gian phức tạp.
   - `IAnomalyRepository` & `IMaintenanceTicketRepository`: Hỗ trợ nạp eager loading các thực thể liên quan (Media, Category, User).
-- [ ] 19. **MediatR Pipeline Behaviors**:
+- [X] 19. **MediatR Pipeline Behaviors**:
   - Triển khai `ValidationBehavior` tích hợp FluentValidation tự động validate đầu vào của Request Command trước khi vào Handler.
   - Triển khai `LoggingBehavior` tự động ghi nhận nhật ký (NLog/Serilog) cho mỗi API Request/Response.
 - [x] 20. **Security & Cryptography**:
   - Triển khai `BCryptPasswordHasher` để mã hoá bảo mật mật khẩu người dùng.
   - Triển khai `JwtProvider` sinh JWT Token đính kèm Claims chi tiết (UserId, Username, Roles).
-- [ ] 21. **Current User Service**: Viết `CurrentUserService` lấy thông tin `UserId` và `Roles` từ `HttpContext.User` của HTTP request hiện tại.
+- [X] 21. **Current User Service**: Viết `CurrentUserService` lấy thông tin `UserId` và `Roles` từ `HttpContext.User` của HTTP request hiện tại.
 - [ ] 21b. **Global Exception Handling Middleware**:
   - Triển khai Middleware bắt lỗi tập trung (Global Exception Handler) sử dụng tiêu chuẩn `ProblemDetails` (RFC 7807) của .NET.
   - Tự động bắt lỗi `ValidationException` từ MediatR/FluentValidation để format về dạng `400 Bad Request` chứa chi tiết các trường bị lỗi.

@@ -46,6 +46,10 @@ public static class DependencyInjection
         services.AddScoped<IPasswordHasher, BCryptPasswordHasher>();
         services.AddScoped<IJwtProvider, JwtProvider>();
         
+        // Đăng ký HttpContextAccessor và CurrentUserServices
+        services.AddHttpContextAccessor();
+        services.AddScoped<ICurrentUserServices, CurrentUserServices>();
+        
         return services;
     }
 }

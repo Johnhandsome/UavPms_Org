@@ -10,6 +10,7 @@ using Hangfire.PostgreSql;
 using Microsoft.EntityFrameworkCore;
 using UavPms.Infrastructure.Persistence;
 using UavPms.Application;
+using UavPms.WebApi.Middlewares;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -27,6 +28,9 @@ builder.Services.AddSwaggerGen();
 builder.Services.AddInfrastructureServices(builder.Configuration);
 builder.Services.AddApplicationServices();
 
+//Global Exception Handler
+builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
+builder.Services.AddProblemDetails();
 
 builder.Services.AddScoped<INotificationRepository, NotificationRepository>();
 
@@ -62,6 +66,9 @@ builder.Services.AddCors(options =>
 
 // XÂY DỰNG ỨNG DỤNG VÀ CẤU HÌNH MIDDLEWARE PIPELINE    
 var app = builder.Build();
+
+// Global Exception Handler
+app.UseExceptionHandler();
 
 // Cấu hình môi trường Development (bật swagger)
 if (app.Environment.IsDevelopment())
