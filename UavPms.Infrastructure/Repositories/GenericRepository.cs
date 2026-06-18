@@ -24,15 +24,10 @@ public class GenericRepository<T> : IGenericRepository<T> where T : class
         {
             return await _context.Set<T>().FindAsync(id);
         }
-        else
-        {
-            var entity = await _context.Set<T>().FindAsync(id);
-            if (entity != null)
-            {
-                _context.Entry(entity).State = EntityState.Detached;
-            }
-            return entity;
-        }
+        
+        return await _context.Set<T>()
+            .AsNoTracking()
+            .FirstOrDefaultAsync(e => EF.Property<Guid>(e, "Id") == id);
     }
 
     public async Task<IReadOnlyList<T>> GetAllAsync(bool track = false)

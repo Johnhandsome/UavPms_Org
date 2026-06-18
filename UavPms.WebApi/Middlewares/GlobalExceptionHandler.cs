@@ -16,7 +16,7 @@ public class GlobalExceptionHandler : IExceptionHandler
     
     public async ValueTask<bool> TryHandleAsync(HttpContext httpContext, Exception exception, CancellationToken cancellationToken)
     {
-        _logger.LogError(exception, "An unhandled exception occured: {Message}", exception.Message);
+        _logger.LogError(exception, "An unhandled exception occurred: {Message}", exception.Message);
 
         ProblemDetails problemDetails;
 
@@ -35,7 +35,7 @@ public class GlobalExceptionHandler : IExceptionHandler
             {
                 Status = (int)HttpStatusCode.BadRequest,
                 Type = "https://tools.ietf.org/html/rfc7231#section-6.5.1",
-                Title = "One ore more validation errors occurred",
+                Title = "One or more validation errors occurred",
                 Detail = "Please refer to errors property for additional details."
             };
         }
@@ -46,8 +46,8 @@ public class GlobalExceptionHandler : IExceptionHandler
             {
                 Status = (int)HttpStatusCode.InternalServerError,
                 Type = "https://tools.ietf.org/html/rfc7231#section-6.6.1",
-                Title = "An unhandled error occured",
-                Detail = "An internal server error has occured. Please contact support."
+                Title = "An unhandled error occurred",
+                Detail = "An internal server error has occurred. Please contact support."
             };
         }
 
