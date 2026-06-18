@@ -32,8 +32,6 @@ builder.Services.AddApplicationServices();
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddProblemDetails();
 
-builder.Services.AddScoped<INotificationRepository, NotificationRepository>();
-
 //Consumers
 builder.Services.AddHostedService<MissionCreatedConsumer>();
 builder.Services.AddHostedService<DefectDetectedConsumer>();
@@ -140,6 +138,7 @@ app.UseStaticFiles(new StaticFileOptions
     RequestPath = "/images"
 });
 
+app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 app.Run();  

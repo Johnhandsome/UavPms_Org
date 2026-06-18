@@ -45,6 +45,9 @@ public static class DependencyInjection
         // Đăng ký Password Hasher và JWT Provider
         services.AddScoped<IPasswordHasher, BCryptPasswordHasher>();
         services.AddScoped<IJwtProvider, JwtProvider>();
+
+        // Đăng ký Notification Repository
+        services.AddScoped<INotificationRepository, NotificationRepository>();
         
         // Đăng ký HttpContextAccessor và CurrentUserServices
         services.AddHttpContextAccessor();

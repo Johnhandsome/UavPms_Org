@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 
 namespace UavPms.Application.Common.Behaviors;
 
-public class ValidationBehavior<TRequest, TResonse> : IPipelineBehavior<TRequest, TResonse>
+public class ValidationBehavior<TRequest, TResponse> : IPipelineBehavior<TRequest, TResponse>
     where TRequest : notnull
 {
     private readonly IEnumerable<IValidator<TRequest>> _validator;
@@ -17,7 +17,7 @@ public class ValidationBehavior<TRequest, TResonse> : IPipelineBehavior<TRequest
         _validator = validator;
     }
     
-    public async Task<TResonse> Handle(TRequest request, RequestHandlerDelegate<TResonse> next, CancellationToken cancellationToken)
+    public async Task<TResponse> Handle(TRequest request, RequestHandlerDelegate<TResponse> next, CancellationToken cancellationToken)
     {
         if (_validator.Any())
         {

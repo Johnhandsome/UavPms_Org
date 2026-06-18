@@ -47,7 +47,7 @@ public class GlobalExceptionHandler : IExceptionHandler
                 Status = (int)HttpStatusCode.InternalServerError,
                 Type = "https://tools.ietf.org/html/rfc7231#section-6.6.1",
                 Title = "An unhandled error occured",
-                Detail = exception.Message
+                Detail = "An internal server error has occured. Please contact support."
             };
         }
 

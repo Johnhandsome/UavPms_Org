@@ -65,7 +65,7 @@ public class AuthController : ControllerBase
         var accessToken = _jwtProvider.GenerateAccessToken(user, roles);
         var refreshToken = _jwtProvider.GenerateRefreshToken();
 
-        user.RefreshToken = refreshToken;
+        user.RefreshToken = HashToken(refreshToken);
         user.RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(7); // Hạn Refresh Token là 7 ngày
         await _unitOfWork.SaveChangesAsync();
 

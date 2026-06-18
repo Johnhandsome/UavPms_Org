@@ -27,7 +27,5 @@ public class NotificationRepository : GenericRepository<Notification>, INotifica
             return;
 
         notification.IsRead = true;
-
-        await _context.SaveChangesAsync();
     }
 }
