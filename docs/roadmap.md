@@ -79,6 +79,15 @@
   - Triển khai `BCryptPasswordHasher` để mã hoá bảo mật mật khẩu người dùng.
   - Triển khai `JwtProvider` sinh JWT Token đính kèm Claims chi tiết (UserId, Username, Roles).
 - [ ] 21. **Current User Service**: Viết `CurrentUserService` lấy thông tin `UserId` và `Roles` từ `HttpContext.User` của HTTP request hiện tại.
+- [ ] 21b. **Global Exception Handling Middleware**:
+  - Triển khai Middleware bắt lỗi tập trung (Global Exception Handler) sử dụng tiêu chuẩn `ProblemDetails` (RFC 7807) của .NET.
+  - Tự động bắt lỗi `ValidationException` từ MediatR/FluentValidation để format về dạng `400 Bad Request` chứa chi tiết các trường bị lỗi.
+- [ ] 21c. **API Versioning & Swagger Integration**:
+  - Cấu hình thư viện `Asp.Versioning.Http` để quản lý phiên bản API động (URL versioning `/api/v{version:apiVersion}`).
+  - Tích hợp với Swagger để tự động tạo và hiển thị tài liệu các phiên bản API tương ứng (v1, v2).
+- [ ] 21d. **Model Binding & Route Constraints**:
+  - Thiết lập Route Constraints dạng `{id:guid}` trên các Controller để tự động validate kiểu dữ liệu ID của API.
+  - Cấu hình Content Negotiation hỗ trợ thương lượng định dạng dữ liệu (JSON/XML) và cấu hình chuẩn camelCase / PascalCase.
 
 ---
 
