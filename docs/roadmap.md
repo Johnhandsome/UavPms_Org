@@ -85,7 +85,7 @@
 - [X] 21c. **API Versioning & Swagger Integration**:
   - Cấu hình thư viện `Asp.Versioning.Http` để quản lý phiên bản API động (URL versioning `/api/v{version:apiVersion}`).
   - Tích hợp với Swagger để tự động tạo và hiển thị tài liệu các phiên bản API tương ứng (v1, v2).
-- [ ] 21d. **Model Binding & Route Constraints**:
+- [X] 21d. **Model Binding & Route Constraints**:
   - Thiết lập Route Constraints dạng `{id:guid}` trên các Controller để tự động validate kiểu dữ liệu ID của API.
   - Cấu hình Content Negotiation hỗ trợ thương lượng định dạng dữ liệu (JSON/XML) và cấu hình chuẩn camelCase / PascalCase.
 
