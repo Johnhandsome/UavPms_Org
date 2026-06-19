@@ -3,11 +3,13 @@ using System;
 using System.Threading.Tasks;
 using UavPms.Core.Entities;
 using UavPms.Core.Interfaces.Repositories;
+using Asp.Versioning;
 
 namespace UavPms.WebApi.Controllers;
 
 [ApiController]
-[Route("api/notifications")]
+[Route("api/v{version:apiVersion}/notifications")]
+[ApiVersion("1.0")]
 public class NotificationController : ControllerBase
 {
     private readonly INotificationRepository _notificationRepository;

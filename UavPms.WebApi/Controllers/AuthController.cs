@@ -8,11 +8,13 @@ using System.Text;
 using UavPms.Core.Entities;
 using UavPms.Core.Interfaces.Repositories;
 using UavPms.Core.Interfaces.Services;
+using Asp.Versioning;
 
 namespace UavPms.WebApi.Controllers;
 
 [ApiController]
-[Route("api/v1/auth")]
+[Route("api/v{version:apiVersion}/auth")]
+[ApiVersion("1.0")]
 public class AuthController : ControllerBase
 {
     private readonly IUserRepository _userRepository;

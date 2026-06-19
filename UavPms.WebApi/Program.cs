@@ -11,6 +11,11 @@ using Microsoft.EntityFrameworkCore;
 using UavPms.Infrastructure.Persistence;
 using UavPms.Application;
 using UavPms.WebApi.Middlewares;
+using Asp.Versioning;
+using Asp.Versioning.ApiExplorer;
+using UavPms.WebApi.Swagger;
+using Microsoft.Extensions.Options; 
+using Swashbuckle.AspNetCore.SwaggerGen;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -20,10 +25,27 @@ builder.Host.UseSerilog((context, loggerConfig) =>
     loggerConfig.WriteTo.Console(); // Viết log ra màn hình Terminal
 });
 
-//  ĐĂNG KÝ SERVICES VÀO DI CONTAINER
+// ĐĂNG KÝ SERVICES VÀO DI CONTAINER
 // ĐĂNG KÝ CONTROLLER
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
+
+// Cấu hình API Versioning 
+builder.Services.AddApiVersioning(options =>
+    {
+        options.DefaultApiVersion = new ApiVersion(1, 0);
+        options.AssumeDefaultVersionWhenUnspecified = true;
+        options.ReportApiVersions = true;
+        options.ApiVersionReader = new UrlSegmentApiVersionReader();
+    })
+    .AddApiExplorer(options =>
+    {
+        options.GroupNameFormat = "'v'VVV";
+        options.SubstituteApiVersionInUrl = true;
+    });
+
+// Đăng ký dịch vụ cấu hình Swagger tự động theo phiên bản
+builder.Services.AddTransient<IConfigureOptions<SwaggerGenOptions>, ConfigureSwaggerOptions>();
 builder.Services.AddSwaggerGen();
 builder.Services.AddInfrastructureServices(builder.Configuration);
 builder.Services.AddApplicationServices();
@@ -47,8 +69,6 @@ builder.Services.AddHangfire(config =>
 });
 
 builder.Services.AddHangfireServer();
-
-//var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 
 // CẤU HÌNH CORS POLICY 
 builder.Services.AddCors(options =>
@@ -74,7 +94,14 @@ app.UseExceptionHandler();
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
-    app.UseSwaggerUI();
+    app.UseSwaggerUI(options =>
+    {
+        var provider = app.Services.GetRequiredService<IApiVersionDescriptionProvider>();
+        foreach (var description in provider.ApiVersionDescriptions)
+        {
+            options.SwaggerEndpoint($"/swagger/{description.GroupName}/swagger.json", description.GroupName.ToUpperInvariant());
+        }
+    });
     app.UseHangfireDashboard();
 
     using var scope = app.Services.CreateScope();
