@@ -36,6 +36,9 @@ services:
       - Redis__ConnectionString=${REDIS_CONNECTION}
       - Redis__Password=${REDIS_PASSWORD}
       - Jwt__SecretKey=${JWT_SECRET}
+      - Jwt__Issuer=${JWT_ISSUER}
+      - Jwt__Audience=${JWT_AUDIENCE}
+      - Jwt__ExpiryMinutes=${JWT_EXPIRY_MINUTES}
       - SendGrid__ApiKey=${SENDGRID_API_KEY}
       - SendGrid__FromEmail=${SENDGRID_FROM_EMAIL}
       - SendGrid__FromName=${SENDGRID_FROM_NAME}
