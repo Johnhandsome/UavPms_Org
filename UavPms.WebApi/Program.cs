@@ -27,7 +27,17 @@ builder.Host.UseSerilog((context, loggerConfig) =>
 
 // ĐĂNG KÝ SERVICES VÀO DI CONTAINER
 // ĐĂNG KÝ CONTROLLER
-builder.Services.AddControllers();
+builder.Services.AddControllers(options =>
+{   
+    options.RespectBrowserAcceptHeader = true; // Tôn trọng header Accept từ client gửi lên
+    options.ReturnHttpNotAcceptable = true; // Trả về lỗi 406 Not Acceptable nếu định dạng yêu cầu không hỗ trợ
+})
+.AddXmlSerializerFormatters() // Thêm định dạng chuyển đổi dữ liệu định dạng XML
+.AddJsonOptions(options =>
+{
+    options.JsonSerializerOptions.PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase; // Chuẩn hõa CamelCase cho Json
+});
+
 builder.Services.AddEndpointsApiExplorer();
 
 // Cấu hình API Versioning 
