@@ -11,6 +11,8 @@ public class User : BaseEntity
     public string Phone { get; set; } = string.Empty;
     public string Status { get; set; } = string.Empty;
 
+    public bool IsEmailVerified { get; set; }
+
     public virtual ICollection<UserRole> UserRoles { get; set; } = new List<UserRole>();
     public virtual ICollection<RefreshToken> RefreshTokens { get; set; } = new List<RefreshToken>();
 }

@@ -1,13 +1,16 @@
 using Microsoft.AspNetCore.Mvc;
 using System;
-using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Security.Cryptography;
 using System.Text;
+using System.Security.Claims;
 using UavPms.Core.Entities;
+using UavPms.Core.Enums;
 using UavPms.Core.Interfaces.Repositories;
 using UavPms.Core.Interfaces.Services;
+using UavPms.Core.Contracts;
+using Microsoft.Extensions.Configuration;
 using Asp.Versioning;
 
 namespace UavPms.WebApi.Controllers;
@@ -23,6 +26,10 @@ public class AuthController : ControllerBase
     private readonly IUnitOfWork _unitOfWork;
     private readonly IConfiguration _configuration;
     private readonly IGenericRepository<RefreshToken> _refreshTokenRepository;
+    private readonly IOtpService _otpService;
+    private readonly IEventPublisher _eventPublisher;
+    private readonly IEnumerable<IOtpPurposeHandler> _otpHandlers;
+    private readonly IGenericRepository<TrustedDevice> _trustedDeviceRepository;
 
     public AuthController(
         IUserRepository userRepository,
@@ -30,7 +37,11 @@ public class AuthController : ControllerBase
         IJwtProvider jwtProvider,
         IUnitOfWork unitOfWork,
         IConfiguration configuration,
-        IGenericRepository<RefreshToken> refreshTokenRepository)
+        IGenericRepository<RefreshToken> refreshTokenRepository,
+        IOtpService otpService,
+        IEventPublisher eventPublisher,
+        IEnumerable<IOtpPurposeHandler> otpHandlers,
+        IGenericRepository<TrustedDevice> trustedDeviceRepository)
     {
         _userRepository = userRepository;
         _passwordHasher = passwordHasher;
@@ -38,151 +49,175 @@ public class AuthController : ControllerBase
         _unitOfWork = unitOfWork;
         _configuration = configuration;
         _refreshTokenRepository = refreshTokenRepository;
+        _otpService = otpService;
+        _eventPublisher = eventPublisher;
+        _otpHandlers = otpHandlers;
+        _trustedDeviceRepository = trustedDeviceRepository;
     }
-    
-    private static string HashToken(string token){
+
+    private static string HashToken(string token)
+    {
         var bytes = Encoding.UTF8.GetBytes(token);
         var hashBytes = SHA256.HashData(bytes);
         return Convert.ToBase64String(hashBytes);
     }
 
-    /// <summary>
-    /// Đăng nhập hệ thống và cấp Access Token + Refresh Token.
-    /// POST: api/login
-    /// </summary>
-    [HttpPost("login")]
-    public async Task<IActionResult> Login([FromBody] LoginRequest request)
+    private async Task<TrustedDevice?> GetValidTrustedDeviceAsync(Guid userId)
     {
-        if (request == null || string.IsNullOrEmpty(request.Username) || string.IsNullOrEmpty(request.Password))
-        {
-            return BadRequest("Username and Password are required.");
-        }
+        var deviceToken = Request.Cookies["device_trust_token"] ?? Request.Headers["X-Device-Trust-Token"].ToString();
 
-        var user = await _userRepository.GetByUsernameWithRolesAsync(request.Username);
-        if (user == null || user.Status != "Active")
-        {
-            return Unauthorized("Invalid credentials or inactive account.");
-        }
+        if (string.IsNullOrEmpty(deviceToken)) return null;
 
-        if (!_passwordHasher.Verify(user.PasswordHash, request.Password))
-        {
-            return Unauthorized("Invalid credentials.");
-        }
+        var hash = HashToken(deviceToken);
 
-        var roles = user.UserRoles.Select(ur => ur.Role!.RoleName).ToList();
+        var devices = await _trustedDeviceRepository.FindAsync(
+            d => d.UserId == userId && d.DeviceTokenHash == hash && d.ExpiresAt > DateTime.UtcNow,
+            track: true);
+
+        return devices.FirstOrDefault();
+    }
+
+    private async Task<IActionResult> IssueAuthenticationResponseAsync(User user)
+    {
+        var roles = user.UserRoles.Select(r => r.Role!.RoleName).ToList();
+
         var accessToken = _jwtProvider.GenerateAccessToken(user, roles);
         var refreshToken = _jwtProvider.GenerateRefreshToken();
 
-        var expiryMinutesStr = _configuration["Jwt:ExpiryMinutes"] ?? "60";
-        double.TryParse(expiryMinutesStr, out var expiryMinutes);
-        if(expiryMinutes <= 0) expiryMinutes = 60;
-        var expriesInSeconds = (int)(expiryMinutes * 60);
+        var expiryMinutes = int.TryParse(_configuration["Jwt:ExpiryMinutes"], out var m) ? m : 60;
 
-        var refreshTokenEntity = new RefreshToken{
+        var refreshTokenEntity = new RefreshToken
+        {
             UserId = user.Id,
             TokenHash = HashToken(refreshToken),
             ExpiresAt = DateTime.UtcNow.AddDays(7),
             DeviceInfo = Request.Headers["User-Agent"].ToString(),
+            CreatedAt = DateTime.UtcNow
         };
 
         await _refreshTokenRepository.AddAsync(refreshTokenEntity);
         await _unitOfWork.SaveChangesAsync();
 
-        return Ok(new
+        return Ok(new ApiResponse(true, "Success", new
         {
             AccessToken = accessToken,
             RefreshToken = refreshToken,
-            TokenType = "Bearer",
-            ExpiresIn = expriesInSeconds,
-            User = new 
+            ExpiresIn = expiryMinutes * 60,
+            User = new
             {
                 user.Id,
-                user.Username,
                 user.Email,
+                user.Username,
                 user.FullName,
                 Roles = roles
             }
-        });
+        }));
     }
 
-    /// <summary>
-    /// Làm mới Access Token sử dụng Refresh Token hợp lệ.
-    /// POST: api/refresh-token
-    /// </summary>
+    [HttpPost("login")]
+    public async Task<IActionResult> Login([FromBody] LoginRequest request)
+    {
+        var user = await _userRepository.GetByEmailWithRolesAsync(request.Email)
+                   ?? await _userRepository.GetByUsernameWithRolesAsync(request.Email);
+
+        if (user == null || user.Status != "Active")
+            return BadRequest(new ApiResponse(false, "Invalid credentials"));
+
+        if (!_passwordHasher.Verify(user.PasswordHash, request.Password))
+            return BadRequest(new ApiResponse(false, "Invalid credentials"));
+
+        if (!user.IsEmailVerified)
+            return BadRequest(new ApiResponse(false, "Email not verified"));
+
+        var trustedDevice = await GetValidTrustedDeviceAsync(user.Id);
+
+        if (trustedDevice != null)
+        {
+            trustedDevice.LastUsedAt = DateTime.UtcNow;
+            trustedDevice.ExpiresAt = DateTime.UtcNow.AddDays(30);
+
+            await _trustedDeviceRepository.UpdateAsync(trustedDevice);
+            await _unitOfWork.SaveChangesAsync();
+
+            return await IssueAuthenticationResponseAsync(user);
+        }
+
+        var otp = await _otpService.GenerateAndSendOtpAsync(user.Email, OtpPurpose.Login);
+
+        if (!otp.Success)
+            return BadRequest(new ApiResponse(false, otp.Message));
+
+        return Ok(new ApiResponse(true, "OTP required", new { user.Email }));
+    }
+
     [HttpPost("refresh-token")]
     public async Task<IActionResult> RefreshToken([FromBody] RefreshTokenRequest request)
     {
-        if (request == null || string.IsNullOrEmpty(request.RefreshToken))
-        {
-            return BadRequest("Refresh Token is required.");
-        }
+        var hash = HashToken(request.RefreshToken);
 
-        var hashedToken = HashToken(request.RefreshToken);
-        var refreshTokens = await _refreshTokenRepository.FindAsync(t => t.TokenHash == hashedToken && t.RevokedAt == null, track: true);
-        var oldRefreshToken = refreshTokens.FirstOrDefault();
+        var token = (await _refreshTokenRepository.FindAsync(
+            x => x.TokenHash == hash && x.RevokedAt == null,
+            track: true)).FirstOrDefault();
 
-        if (oldRefreshToken == null) 
-        {
-            return Unauthorized("Invalid refresh token.");
-        }
-        
-        if (oldRefreshToken.ExpiresAt <= DateTime.UtcNow)
-        {
-            return Unauthorized("Refresh token has expired.");
-        }
-        
-        var user = await _userRepository.GetByIdAsync(oldRefreshToken.UserId);
+        if (token == null || token.ExpiresAt <= DateTime.UtcNow)
+            return BadRequest(new ApiResponse(false, "Invalid refresh token"));
+
+        var user = await _userRepository.GetByIdAsync(token.UserId);
 
         if (user == null || user.Status != "Active")
+            return Unauthorized();
+
+        token.RevokedAt = DateTime.UtcNow;
+
+        var roles = user.UserRoles.Select(r => r.Role!.RoleName).ToList();
+
+        var newAccess = _jwtProvider.GenerateAccessToken(user, roles);
+        var newRefresh = _jwtProvider.GenerateRefreshToken();
+
+        await _refreshTokenRepository.AddAsync(new RefreshToken
         {
-            return Unauthorized("Invalid refresh token.");
-        }
-
-        oldRefreshToken.RevokedAt = DateTime.UtcNow;
-
-        var userWithRoles = await _userRepository.GetByUsernameWithRolesAsync(user.Username);
-        if (userWithRoles == null) 
-        {
-            return Unauthorized("User not found.");
-        }
-
-        var roles = userWithRoles.UserRoles.Select(ur => ur.Role!.RoleName).ToList();
-
-        var newAccessToken = _jwtProvider.GenerateAccessToken(userWithRoles, roles);
-        var newRefreshToken = _jwtProvider.GenerateRefreshToken();
-
-        var newRefreshTokenEntity = new RefreshToken{
             UserId = user.Id,
-            TokenHash = HashToken(newRefreshToken),
+            TokenHash = HashToken(newRefresh),
             ExpiresAt = DateTime.UtcNow.AddDays(7),
-            DeviceInfo = Request.Headers["User-Agent"].ToString()
-        };
+            DeviceInfo = Request.Headers["User-Agent"].ToString(),
+            CreatedAt = DateTime.UtcNow
+        });
 
-        await _refreshTokenRepository.AddAsync(newRefreshTokenEntity);
         await _unitOfWork.SaveChangesAsync();
-
-        var expiryMinutesStr = _configuration["Jwt:ExpiryMinutes"] ?? "60";
-        double.TryParse(expiryMinutesStr, out var expiryMinutes);
-        if(expiryMinutes <= 0) expiryMinutes = 60;
-        var expriesInSeconds = (int)(expiryMinutes * 60);
 
         return Ok(new
         {
-            AccessToken = newAccessToken,
-            RefreshToken = newRefreshToken,
-            TokenType = "Bearer",
-            ExpiresIn = expriesInSeconds,
-            User = new
-            {
-                userWithRoles.Id,
-                userWithRoles.Username,
-                userWithRoles.Email,
-                userWithRoles.FullName,
-                Roles = roles
-            }
+            AccessToken = newAccess,
+            RefreshToken = newRefresh
         });
     }
-}
 
-public record LoginRequest(string Username, string Password);
-public record RefreshTokenRequest(string RefreshToken);
+    [HttpPost("reset-password")]
+    public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordRequest request)
+    {
+        var hash = HashToken(request.VerificationToken);
+
+        var email = await _otpService.GetVerificationTokenEmailAsync(hash);
+
+        if (string.IsNullOrEmpty(email))
+            return BadRequest("Invalid token");
+
+        var user = await _userRepository.GetByEmailWithRolesAsync(email);
+
+        if (user == null)
+            return BadRequest("User not found");
+
+        user.PasswordHash = _passwordHasher.Hash(request.NewPassword);
+
+        await _userRepository.UpdateAsync(user);
+        await _unitOfWork.SaveChangesAsync();
+
+        await _otpService.DeleteVerificationTokenAsync(hash);
+
+        return Ok(new ApiResponse(true, "Success"));
+    }
+
+    public record LoginRequest(string Email, string Password);
+    public record RefreshTokenRequest(string RefreshToken);
+    public record ResetPasswordRequest(string VerificationToken, string NewPassword);
+}

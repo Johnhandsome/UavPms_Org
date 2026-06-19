@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using NetTopologySuite.Geometries;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
@@ -12,9 +13,11 @@ using UavPms.Infrastructure.Persistence;
 namespace UavPms.Infrastructure.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260619121232_AddPasswordResetTokensTable")]
+    partial class AddPasswordResetTokensTable
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -905,7 +908,7 @@ namespace UavPms.Infrastructure.Migrations
                     b.ToTable("Notifications", (string)null);
                 });
 
-            modelBuilder.Entity("UavPms.Core.Entities.RefreshToken", b =>
+            modelBuilder.Entity("UavPms.Core.Entities.PasswordResetToken", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -920,19 +923,13 @@ namespace UavPms.Infrastructure.Migrations
                     b.Property<DateTime?>("DeletedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("DeviceInfo")
-                        .HasColumnType("text");
-
-                    b.Property<DateTime>("ExpiresAt")
+                    b.Property<DateTime>("ExpiryDate")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean");
 
-                    b.Property<DateTime?>("RevokedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("TokenHash")
+                    b.Property<string>("Token")
                         .IsRequired()
                         .HasColumnType("text");
 
@@ -941,6 +938,9 @@ namespace UavPms.Infrastructure.Migrations
 
                     b.Property<Guid?>("UpdatedBy")
                         .HasColumnType("uuid");
+
+                    b.Property<bool>("Used")
+                        .HasColumnType("boolean");
 
                     b.Property<Guid>("UserId")
                         .HasColumnType("uuid");
@@ -1164,53 +1164,6 @@ namespace UavPms.Infrastructure.Migrations
                     b.ToTable("TransmissionLines", (string)null);
                 });
 
-            modelBuilder.Entity("UavPms.Core.Entities.TrustedDevice", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid?>("CreatedBy")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime?>("DeletedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("DeviceTokenHash")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<DateTime>("ExpiresAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<bool>("IsDeleted")
-                        .HasColumnType("boolean");
-
-                    b.Property<DateTime>("LastUsedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid?>("UpdatedBy")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("UserAgent")
-                        .HasColumnType("text");
-
-                    b.Property<Guid>("UserId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("UserId");
-
-                    b.ToTable("TrustedDevices", (string)null);
-                });
-
             modelBuilder.Entity("UavPms.Core.Entities.Uav", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1294,9 +1247,6 @@ namespace UavPms.Infrastructure.Migrations
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean");
 
-                    b.Property<bool>("IsEmailVerified")
-                        .HasColumnType("boolean");
-
                     b.Property<string>("PasswordHash")
                         .IsRequired()
                         .HasColumnType("text");
@@ -1304,6 +1254,13 @@ namespace UavPms.Infrastructure.Migrations
                     b.Property<string>("Phone")
                         .IsRequired()
                         .HasColumnType("text");
+
+                    b.Property<string>("RefreshToken")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("RefreshTokenExpiryTime")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("Status")
                         .IsRequired()
@@ -1652,10 +1609,10 @@ namespace UavPms.Infrastructure.Migrations
                     b.Navigation("User");
                 });
 
-            modelBuilder.Entity("UavPms.Core.Entities.RefreshToken", b =>
+            modelBuilder.Entity("UavPms.Core.Entities.PasswordResetToken", b =>
                 {
                     b.HasOne("UavPms.Core.Entities.User", "User")
-                        .WithMany("RefreshTokens")
+                        .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
@@ -1694,17 +1651,6 @@ namespace UavPms.Infrastructure.Migrations
                         .IsRequired();
 
                     b.Navigation("Substation");
-                });
-
-            modelBuilder.Entity("UavPms.Core.Entities.TrustedDevice", b =>
-                {
-                    b.HasOne("UavPms.Core.Entities.User", "User")
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("UavPms.Core.Entities.UserRole", b =>
@@ -1817,8 +1763,6 @@ namespace UavPms.Infrastructure.Migrations
 
             modelBuilder.Entity("UavPms.Core.Entities.User", b =>
                 {
-                    b.Navigation("RefreshTokens");
-
                     b.Navigation("UserRoles");
                 });
 #pragma warning restore 612, 618

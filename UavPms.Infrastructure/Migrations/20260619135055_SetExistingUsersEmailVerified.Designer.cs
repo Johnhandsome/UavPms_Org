@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using NetTopologySuite.Geometries;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
@@ -12,9 +13,11 @@ using UavPms.Infrastructure.Persistence;
 namespace UavPms.Infrastructure.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260619135055_SetExistingUsersEmailVerified")]
+    partial class SetExistingUsersEmailVerified
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -905,7 +908,7 @@ namespace UavPms.Infrastructure.Migrations
                     b.ToTable("Notifications", (string)null);
                 });
 
-            modelBuilder.Entity("UavPms.Core.Entities.RefreshToken", b =>
+            modelBuilder.Entity("UavPms.Core.Entities.PasswordResetToken", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -920,19 +923,13 @@ namespace UavPms.Infrastructure.Migrations
                     b.Property<DateTime?>("DeletedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("DeviceInfo")
-                        .HasColumnType("text");
-
-                    b.Property<DateTime>("ExpiresAt")
+                    b.Property<DateTime>("ExpiryDate")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean");
 
-                    b.Property<DateTime?>("RevokedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("TokenHash")
+                    b.Property<string>("Token")
                         .IsRequired()
                         .HasColumnType("text");
 
@@ -941,6 +938,9 @@ namespace UavPms.Infrastructure.Migrations
 
                     b.Property<Guid?>("UpdatedBy")
                         .HasColumnType("uuid");
+
+                    b.Property<bool>("Used")
+                        .HasColumnType("boolean");
 
                     b.Property<Guid>("UserId")
                         .HasColumnType("uuid");
@@ -1305,6 +1305,13 @@ namespace UavPms.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<string>("RefreshToken")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("RefreshTokenExpiryTime")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasColumnType("text");
@@ -1652,10 +1659,10 @@ namespace UavPms.Infrastructure.Migrations
                     b.Navigation("User");
                 });
 
-            modelBuilder.Entity("UavPms.Core.Entities.RefreshToken", b =>
+            modelBuilder.Entity("UavPms.Core.Entities.PasswordResetToken", b =>
                 {
                     b.HasOne("UavPms.Core.Entities.User", "User")
-                        .WithMany("RefreshTokens")
+                        .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
@@ -1817,8 +1824,6 @@ namespace UavPms.Infrastructure.Migrations
 
             modelBuilder.Entity("UavPms.Core.Entities.User", b =>
                 {
-                    b.Navigation("RefreshTokens");
-
                     b.Navigation("UserRoles");
                 });
 #pragma warning restore 612, 618
