@@ -161,4 +161,4 @@ public class AuthController : ControllerBase
 }
 
 public record LoginRequest(string Username, string Password);
-public record RefreshTokenRequest(string RefreshToken, string? AccessToken);
+public record RefreshTokenRequest(string RefreshToken);
