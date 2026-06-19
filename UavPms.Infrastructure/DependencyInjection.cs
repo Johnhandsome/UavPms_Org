@@ -26,6 +26,8 @@ public static class DependencyInjection
                         maxRetryDelay: TimeSpan.FromSeconds(30),
                         errorCodesToAdd: null);
                 });
+            
+            options.ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning));
         });
         
         // Đăng ký RabbitMQ Connection helper dưới dạng Singleton (Tạm thời tắt để chạy offline)
