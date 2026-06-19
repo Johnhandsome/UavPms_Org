@@ -64,9 +64,11 @@ public class AuthController : ControllerBase
         return Convert.ToBase64String(hashBytes);
     }
 
-    private async Task<TrustedDevice?> GetValidTrustedDeviceAsync(Guid userId)
+    private async Task<TrustedDevice?> GetValidTrustedDeviceAsync(Guid userId, string? requestDeviceToken = null)
     {
-        var deviceToken = Request.Cookies["device_trust_token"] ?? Request.Headers["X-Device-Trust-Token"].ToString();
+        var deviceToken = requestDeviceToken 
+            ?? Request.Cookies["device_trust_token"] 
+            ?? Request.Headers["X-Device-Trust-Token"].ToString();
 
         if (string.IsNullOrEmpty(deviceToken)) return null;
 
@@ -105,7 +107,7 @@ public class AuthController : ControllerBase
             var cookieOptions = new CookieOptions
             {
                 HttpOnly = true,
-                Secure = true,
+                Secure = Request.IsHttps,
                 SameSite = SameSiteMode.Strict,
                 Expires = DateTime.UtcNow.AddDays(30)
             };
@@ -144,7 +146,7 @@ public class AuthController : ControllerBase
         if (!user.IsEmailVerified)
             return BadRequest(new ApiResponse(false, "Email not verified"));
 
-        var trustedDevice = await GetValidTrustedDeviceAsync(user.Id);
+        var trustedDevice = await GetValidTrustedDeviceAsync(user.Id, request.DeviceTrustToken);
 
         if (trustedDevice != null)
         {
@@ -154,7 +156,9 @@ public class AuthController : ControllerBase
             await _trustedDeviceRepository.UpdateAsync(trustedDevice);
             await _unitOfWork.SaveChangesAsync();
 
-            var deviceTrustToken = Request.Cookies["device_trust_token"] ?? Request.Headers["X-Device-Trust-Token"].ToString();
+            var deviceTrustToken = request.DeviceTrustToken 
+                ?? Request.Cookies["device_trust_token"] 
+                ?? Request.Headers["X-Device-Trust-Token"].ToString();
             return await IssueAuthenticationResponseAsync(user, deviceTrustToken);
         }
 
@@ -423,7 +427,7 @@ public class AuthController : ControllerBase
         return Ok(new ApiResponse(true, "Success"));
     }
 
-    public record LoginRequest(string Email, string Password);
+    public record LoginRequest(string Email, string Password, string? DeviceTrustToken = null);
     public record RefreshTokenRequest(string RefreshToken);
     public record SendOtpRequest(string? Email, OtpPurpose Purpose);
     public record VerifyOtpRequest(string? Email, string Otp, OtpPurpose Purpose);
