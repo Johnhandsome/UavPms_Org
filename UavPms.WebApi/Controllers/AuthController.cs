@@ -22,19 +22,22 @@ public class AuthController : ControllerBase
     private readonly IJwtProvider _jwtProvider;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IConfiguration _configuration;
+    private readonly IGenericRepository<RefreshToken> _refreshTokenRepository;
 
     public AuthController(
         IUserRepository userRepository,
         IPasswordHasher passwordHasher,
         IJwtProvider jwtProvider,
         IUnitOfWork unitOfWork,
-        IConfiguration configuration)
+        IConfiguration configuration,
+        IGenericRepository<RefreshToken> refreshTokenRepository)
     {
         _userRepository = userRepository;
         _passwordHasher = passwordHasher;
         _jwtProvider = jwtProvider;
         _unitOfWork = unitOfWork;
         _configuration = configuration;
+        _refreshTokenRepository = refreshTokenRepository;
     }
     
     private static string HashToken(string token){
@@ -75,8 +78,14 @@ public class AuthController : ControllerBase
         if(expiryMinutes <= 0) expiryMinutes = 60;
         var expriesInSeconds = (int)(expiryMinutes * 60);
 
-        user.RefreshToken = HashToken(refreshToken);
-        user.RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(7); // Hạn Refresh Token là 7 ngày
+        var refreshTokenEntity = new RefreshToken{
+            UserId = user.Id,
+            TokenHash = HashToken(refreshToken),
+            ExpiresAt = DateTime.UtcNow.AddDays(7),
+            DeviceInfo = Request.Headers["User-Agent"].ToString(),
+        };
+
+        await _refreshTokenRepository.AddAsync(refreshTokenEntity);
         await _unitOfWork.SaveChangesAsync();
 
         return Ok(new
@@ -109,18 +118,27 @@ public class AuthController : ControllerBase
         }
 
         var hashedToken = HashToken(request.RefreshToken);
-        var users = await _userRepository.FindAsync(u => u.RefreshToken == hashedToken, track: true);
-        var user = users.FirstOrDefault();
+        var refreshTokens = await _refreshTokenRepository.FindAsync(t => t.TokenHash == hashedToken && t.RevokedAt == null, track: true);
+        var oldRefreshToken = refreshTokens.FirstOrDefault();
+
+        if (oldRefreshToken == null) 
+        {
+            return Unauthorized("Invalid refresh token.");
+        }
+        
+        if (oldRefreshToken.ExpiresAt <= DateTime.UtcNow)
+        {
+            return Unauthorized("Refresh token has expired.");
+        }
+        
+        var user = await _userRepository.GetByIdAsync(oldRefreshToken.UserId);
 
         if (user == null || user.Status != "Active")
         {
             return Unauthorized("Invalid refresh token.");
         }
 
-        if (user.RefreshTokenExpiryTime == null ||user.RefreshTokenExpiryTime <= DateTime.UtcNow)
-        {
-            return Unauthorized("Refresh token has expired.");
-        }
+        oldRefreshToken.RevokedAt = DateTime.UtcNow;
 
         var userWithRoles = await _userRepository.GetByUsernameWithRolesAsync(user.Username);
         if (userWithRoles == null) 
@@ -133,8 +151,14 @@ public class AuthController : ControllerBase
         var newAccessToken = _jwtProvider.GenerateAccessToken(userWithRoles, roles);
         var newRefreshToken = _jwtProvider.GenerateRefreshToken();
 
-        user.RefreshToken = HashToken(newRefreshToken);
-        user.RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(7);
+        var newRefreshTokenEntity = new RefreshToken{
+            UserId = user.Id,
+            TokenHash = HashToken(newRefreshToken),
+            ExpiresAt = DateTime.UtcNow.AddDays(7),
+            DeviceInfo = Request.Headers["User-Agent"].ToString()
+        };
+
+        await _refreshTokenRepository.AddAsync(newRefreshTokenEntity);
         await _unitOfWork.SaveChangesAsync();
 
         var expiryMinutesStr = _configuration["Jwt:ExpiryMinutes"] ?? "60";
