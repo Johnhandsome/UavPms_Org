@@ -54,7 +54,7 @@ public class AuthController : ControllerBase
         }
 
         var user = await _userRepository.GetByUsernameWithRolesAsync(request.Username);
-        if (user == null || user.IsDeleted || user.Status != "Active")
+        if (user == null || user.Status != "Active")
         {
             return Unauthorized("Invalid credentials or inactive account.");
         }
@@ -110,7 +110,7 @@ public class AuthController : ControllerBase
         var users = await _userRepository.FindAsync(u => u.RefreshToken == hashedToken, track: true);
         var user = users.FirstOrDefault();
 
-        if (user == null || user.IsDeleted || user.Status != "Active")
+        if (user == null || user.Status != "Active")
         {
             return Unauthorized("Invalid refresh token.");
         }
