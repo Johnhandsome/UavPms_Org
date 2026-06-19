@@ -1,10 +1,16 @@
+using System;
+using System.Collections.Generic;
+using System.Linq.Expressions;
+using System.Threading.Tasks;
+
 namespace UavPms.Core.Interfaces.Repositories;
 
-// Ràng buộc 'where T : class' để đảm bảo rằng T luôn là một Entity (Drone, Alert, AppUser,...)
 public interface IGenericRepository<T> where T : class
 {
-    Task<T> GetByIdAsync(Guid id);
-    Task<IReadOnlyList<T>> GetAllAsync();
+    Task<T?> GetByIdAsync(Guid id, bool track = true);
+    Task<IReadOnlyList<T>> GetAllAsync(bool track = false);
+    Task<IReadOnlyList<T>> FindAsync(Expression<Func<T, bool>> predicate, bool track = false);
     Task<T> AddAsync(T entity);
     Task UpdateAsync(T entity);
+    Task DeleteAsync(T entity);
 }

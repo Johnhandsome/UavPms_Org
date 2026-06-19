@@ -4,5 +4,6 @@ namespace UavPms.Core.Interfaces.Services;
 
 public interface IJwtProvider
 {
-    string GenerateToken(AppUser user, IList<string> roles);
+    string GenerateAccessToken(User user, IList<string> roles);
+    string GenerateRefreshToken();
 }

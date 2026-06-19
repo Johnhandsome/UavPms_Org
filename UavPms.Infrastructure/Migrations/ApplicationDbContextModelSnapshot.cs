@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
+using NetTopologySuite.Geometries;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using UavPms.Infrastructure.Persistence;
 
@@ -20,42 +21,1172 @@ namespace UavPms.Infrastructure.Migrations
                 .HasAnnotation("ProductVersion", "9.0.16")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
+            NpgsqlModelBuilderExtensions.HasPostgresExtension(modelBuilder, "postgis");
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
-            modelBuilder.Entity("UavPms.Core.Entities.AppRole", b =>
+            modelBuilder.Entity("UavPms.Core.Entities.AlertEscalation", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<Guid>("AlertId")
+                        .HasColumnType("uuid");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("Description")
-                        .HasColumnType("text");
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("EscalatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("EscalatedBy")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("EscalatedTo")
+                        .HasColumnType("uuid");
 
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean");
 
-                    b.Property<string>("Name")
+                    b.Property<string>("Reason")
                         .IsRequired()
                         .HasColumnType("text");
 
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid");
+
                     b.HasKey("Id");
 
-                    b.ToTable("Roles");
+                    b.HasIndex("AlertId");
+
+                    b.HasIndex("EscalatedBy");
+
+                    b.HasIndex("EscalatedTo");
+
+                    b.ToTable("AlertEscalations", (string)null);
                 });
 
-            modelBuilder.Entity("UavPms.Core.Entities.AppUser", b =>
+            modelBuilder.Entity("UavPms.Core.Entities.Asset", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("AssetCode")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("AssetType")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid");
+
+                    b.Property<double>("CurrentHealthScore")
+                        .HasColumnType("double precision");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime?>("LastInspectedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("RiskLevel")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("TowerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AssetCode")
+                        .IsUnique();
+
+                    b.HasIndex("TowerId");
+
+                    b.ToTable("Assets", (string)null);
+                });
+
+            modelBuilder.Entity("UavPms.Core.Entities.AssetHealthHistory", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("ActiveDefectsCount")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("AssetId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CalculatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CalculationLog")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<double>("HealthScore")
+                        .HasColumnType("double precision");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("RiskLevel")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AssetId");
+
+                    b.ToTable("AssetHealthHistories", (string)null);
+                });
+
+            modelBuilder.Entity("UavPms.Core.Entities.AuditLog", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ActionType")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("IpAddress")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("NewValues")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("OldValues")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<Guid>("RecordId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("TableName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("UserAgent")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid?>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("AuditLogs", (string)null);
+                });
+
+            modelBuilder.Entity("UavPms.Core.Entities.DefectCategory", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("CategoryCode")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("CategoryName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<bool>("IsEmergencyClass")
+                        .HasColumnType("boolean");
+
+                    b.Property<double>("SeverityWeight")
+                        .HasColumnType("double precision");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CategoryCode")
+                        .IsUnique();
+
+                    b.ToTable("DefectCategories", (string)null);
+                });
+
+            modelBuilder.Entity("UavPms.Core.Entities.DetectedAnomaly", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("AiSource")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid?>("AnalystId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("AnalystNotes")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("AssetId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("BoundingBox")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<int>("CategoryId")
+                        .HasColumnType("integer");
+
+                    b.Property<double>("ConfidenceScore")
+                        .HasColumnType("double precision");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid>("MediaId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("ValidatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ValidationStatus")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AnalystId");
+
+                    b.HasIndex("AssetId");
+
+                    b.HasIndex("CategoryId");
+
+                    b.HasIndex("MediaId");
+
+                    b.ToTable("DetectedAnomalies", (string)null);
+                });
+
+            modelBuilder.Entity("UavPms.Core.Entities.EmergencyAlert", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("AnomalyId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("AssetId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("DeliveryLatencySeconds")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid>("MissionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Priority")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("ReceivedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("ResolvedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("TriggeredAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AnomalyId");
+
+                    b.HasIndex("AssetId");
+
+                    b.HasIndex("MissionId");
+
+                    b.ToTable("EmergencyAlerts", (string)null);
+                });
+
+            modelBuilder.Entity("UavPms.Core.Entities.IncidentReport", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("AssetId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("FileUrl")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("IncidentType")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid>("MissionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("ReportedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("ReportedBy")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Severity")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AssetId");
+
+                    b.HasIndex("MissionId");
+
+                    b.HasIndex("ReportedBy");
+
+                    b.ToTable("IncidentReports", (string)null);
+                });
+
+            modelBuilder.Entity("UavPms.Core.Entities.InspectionMedia", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("AiSource")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("AssetId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CapturedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("FileUrl")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("MediaType")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("MissionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ValidationStatus")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AssetId");
+
+                    b.HasIndex("MissionId");
+
+                    b.ToTable("InspectionMedia", (string)null);
+                });
+
+            modelBuilder.Entity("UavPms.Core.Entities.MaintenanceProof", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("AfterRepairImageUrl")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("FileUrl")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("TechnicianNotes")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("TicketId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("UploadedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("UploadedBy")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TicketId");
+
+                    b.HasIndex("UploadedBy");
+
+                    b.ToTable("MaintenanceProofs", (string)null);
+                });
+
+            modelBuilder.Entity("UavPms.Core.Entities.MaintenanceTicket", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("AnomalyId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("AssetId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("AssignedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("DueDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid>("ManagerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Priority")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("ResolvedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("StartedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("TechnicianId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("TicketCode")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AnomalyId");
+
+                    b.HasIndex("AssetId");
+
+                    b.HasIndex("ManagerId");
+
+                    b.HasIndex("TechnicianId");
+
+                    b.HasIndex("TicketCode")
+                        .IsUnique();
+
+                    b.ToTable("MaintenanceTickets", (string)null);
+                });
+
+            modelBuilder.Entity("UavPms.Core.Entities.MaterialLog", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ComponentCode")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("ComponentName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("FieldObservations")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime>("LoggedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("LoggedBy")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("QuantityUsed")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("TicketId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Unit")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LoggedBy");
+
+                    b.HasIndex("TicketId");
+
+                    b.ToTable("MaterialLogs", (string)null);
+                });
+
+            modelBuilder.Entity("UavPms.Core.Entities.Mission", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
                     b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("EndedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("InspectorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid>("ManagerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("MissionCode")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("ScheduledStartAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("StartedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("UavId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("InspectorId");
+
+                    b.HasIndex("ManagerId");
+
+                    b.HasIndex("MissionCode")
+                        .IsUnique();
+
+                    b.HasIndex("UavId");
+
+                    b.ToTable("Missions", (string)null);
+                });
+
+            modelBuilder.Entity("UavPms.Core.Entities.MissionFlightLog", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ConnectionStatus")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("FlightDurationSeconds")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("GpsTrack")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<double>("MaxAltitudeM")
+                        .HasColumnType("double precision");
+
+                    b.Property<double>("MinBatteryRecorded")
+                        .HasColumnType("double precision");
+
+                    b.Property<Guid>("MissionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("RecordedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("MissionId");
+
+                    b.ToTable("MissionFlightLogs", (string)null);
+                });
+
+            modelBuilder.Entity("UavPms.Core.Entities.MissionTargetLine", b =>
+                {
+                    b.Property<Guid>("MissionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("LineAssetId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("MissionId", "LineAssetId");
+
+                    b.HasIndex("LineAssetId");
+
+                    b.ToTable("MissionTargetLines", (string)null);
+                });
+
+            modelBuilder.Entity("UavPms.Core.Entities.Notification", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Body")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<bool>("IsRead")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime?>("ReadAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("ReferenceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ReferenceType")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("SentAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("Notifications", (string)null);
+                });
+
+            modelBuilder.Entity("UavPms.Core.Entities.Region", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Geometry>("Geom")
+                        .HasColumnType("geometry");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("RegionName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Geom");
+
+                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("Geom"), "gist");
+
+                    b.ToTable("Regions", (string)null);
+                });
+
+            modelBuilder.Entity("UavPms.Core.Entities.Role", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("RoleName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RoleName")
+                        .IsUnique();
+
+                    b.ToTable("Roles", (string)null);
+                });
+
+            modelBuilder.Entity("UavPms.Core.Entities.Substation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Geometry>("Geom")
+                        .HasColumnType("geometry");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid>("RegionAssetId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("SubstationName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("VoltageLevel")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Geom");
+
+                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("Geom"), "gist");
+
+                    b.HasIndex("RegionAssetId");
+
+                    b.ToTable("Substations", (string)null);
+                });
+
+            modelBuilder.Entity("UavPms.Core.Entities.Tower", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Geometry>("Geom")
+                        .HasColumnType("geometry");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid>("LineAssetId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("TowerCode")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Geom");
+
+                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("Geom"), "gist");
+
+                    b.HasIndex("LineAssetId");
+
+                    b.HasIndex("TowerCode")
+                        .IsUnique();
+
+                    b.ToTable("Towers", (string)null);
+                });
+
+            modelBuilder.Entity("UavPms.Core.Entities.TransmissionLine", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Geometry>("Geom")
+                        .HasColumnType("geometry");
+
+                    b.Property<bool>("IsCriticalEdge")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("LineName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("SubstationAssetId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Geom");
+
+                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("Geom"), "gist");
+
+                    b.HasIndex("LineName")
+                        .IsUnique();
+
+                    b.HasIndex("SubstationAssetId");
+
+                    b.ToTable("TransmissionLines", (string)null);
+                });
+
+            modelBuilder.Entity("UavPms.Core.Entities.Uav", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<double>("BatteryLevel")
+                        .HasColumnType("double precision");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid");
+
+                    b.Property<Point>("CurrentLocation")
+                        .HasColumnType("geometry");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime?>("LastMaintenanceAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Model")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("UavCode")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CurrentLocation");
+
+                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("CurrentLocation"), "gist");
+
+                    b.HasIndex("UavCode")
+                        .IsUnique();
+
+                    b.ToTable("UAVs", (string)null);
+                });
+
+            modelBuilder.Entity("UavPms.Core.Entities.User", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("DeletedAt")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("Email")
@@ -66,9 +1197,6 @@ namespace UavPms.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("boolean");
-
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean");
 
@@ -76,297 +1204,406 @@ namespace UavPms.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("Users");
-                });
-
-            modelBuilder.Entity("UavPms.Core.Entities.DetectionAlert", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<int>("AlertClass")
-                        .HasColumnType("integer");
-
-                    b.Property<double>("Confidence")
-                        .HasColumnType("double precision");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid>("DroneId")
-                        .HasColumnType("uuid");
-
-                    b.Property<bool>("IsDeleted")
-                        .HasColumnType("boolean");
-
-                    b.Property<bool>("IsValidated")
-                        .HasColumnType("boolean");
-
-                    b.Property<DateTime>("Timestamp")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("DroneId");
-
-                    b.ToTable("DetectionAlerts");
-                });
-
-            modelBuilder.Entity("UavPms.Core.Entities.Drone", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<double>("BatteryPercentage")
-                        .HasColumnType("double precision");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("DeviceCode")
+                    b.Property<string>("Phone")
                         .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
+                        .HasColumnType("text");
 
-                    b.Property<bool>("IsDeleted")
-                        .HasColumnType("boolean");
-
-                    b.Property<string>("Name")
+                    b.Property<string>("RefreshToken")
                         .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
+                        .HasColumnType("text");
 
-                    b.Property<int>("Status")
-                        .HasColumnType("integer");
+                    b.Property<DateTime?>("RefreshTokenExpiryTime")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("text");
 
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Username")
+                        .IsRequired()
+                        .HasColumnType("text");
+
                     b.HasKey("Id");
 
-                    b.HasIndex("DeviceCode")
+                    b.HasIndex("Username")
                         .IsUnique();
 
-                    b.ToTable("Drones");
+                    b.ToTable("Users", (string)null);
                 });
 
-            modelBuilder.Entity("UavPms.Core.Entities.DroneTelemetry", b =>
+            modelBuilder.Entity("UavPms.Core.Entities.UserRole", b =>
                 {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
+                    b.Property<Guid>("UserId")
                         .HasColumnType("uuid");
 
-                    b.Property<double>("Altitude")
-                        .HasColumnType("double precision");
+                    b.Property<int>("RoleId")
+                        .HasColumnType("integer");
 
-                    b.Property<DateTime>("CreatedAt")
+                    b.Property<DateTime>("AssignedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<Guid>("DroneId")
-                        .HasColumnType("uuid");
+                    b.HasKey("UserId", "RoleId");
 
-                    b.Property<bool>("IsDeleted")
-                        .HasColumnType("boolean");
+                    b.HasIndex("RoleId");
 
-                    b.Property<double>("Latitude")
-                        .HasColumnType("double precision");
-
-                    b.Property<double>("Longitude")
-                        .HasColumnType("double precision");
-
-                    b.Property<DateTime>("Timestamp")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("DroneId");
-
-                    b.ToTable("DroneTelemetries");
+                    b.ToTable("UserRoles", (string)null);
                 });
 
-            modelBuilder.Entity("UavPms.Core.Entities.EvidenceImage", b =>
+            modelBuilder.Entity("UavPms.Core.Entities.AlertEscalation", b =>
                 {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
+                    b.HasOne("UavPms.Core.Entities.EmergencyAlert", "Alert")
+                        .WithMany("AlertEscalations")
+                        .HasForeignKey("AlertId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                    b.HasOne("UavPms.Core.Entities.User", "EscalatedByUser")
+                        .WithMany()
+                        .HasForeignKey("EscalatedBy")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
 
-                    b.Property<Guid>("DetectionAlertId")
-                        .HasColumnType("uuid");
+                    b.HasOne("UavPms.Core.Entities.User", "EscalatedToUser")
+                        .WithMany()
+                        .HasForeignKey("EscalatedTo")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
 
-                    b.Property<string>("ImagePath")
-                        .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("character varying(255)");
+                    b.Navigation("Alert");
 
-                    b.Property<long>("ImageSizeBytes")
-                        .HasColumnType("bigint");
+                    b.Navigation("EscalatedByUser");
 
-                    b.Property<bool>("IsDeleted")
-                        .HasColumnType("boolean");
+                    b.Navigation("EscalatedToUser");
+                });
 
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
+            modelBuilder.Entity("UavPms.Core.Entities.Asset", b =>
+                {
+                    b.HasOne("UavPms.Core.Entities.Tower", "Tower")
+                        .WithMany("Assets")
+                        .HasForeignKey("TowerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
 
-                    b.HasKey("Id");
+                    b.Navigation("Tower");
+                });
 
-                    b.HasIndex("DetectionAlertId")
-                        .IsUnique();
+            modelBuilder.Entity("UavPms.Core.Entities.AssetHealthHistory", b =>
+                {
+                    b.HasOne("UavPms.Core.Entities.Asset", "Asset")
+                        .WithMany("HealthHistories")
+                        .HasForeignKey("AssetId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
-                    b.ToTable("EvidenceImages");
+                    b.Navigation("Asset");
+                });
+
+            modelBuilder.Entity("UavPms.Core.Entities.AuditLog", b =>
+                {
+                    b.HasOne("UavPms.Core.Entities.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("UavPms.Core.Entities.DetectedAnomaly", b =>
+                {
+                    b.HasOne("UavPms.Core.Entities.User", "Analyst")
+                        .WithMany()
+                        .HasForeignKey("AnalystId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("UavPms.Core.Entities.Asset", "Asset")
+                        .WithMany("DetectedAnomalies")
+                        .HasForeignKey("AssetId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("UavPms.Core.Entities.DefectCategory", "Category")
+                        .WithMany("DetectedAnomalies")
+                        .HasForeignKey("CategoryId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("UavPms.Core.Entities.InspectionMedia", "Media")
+                        .WithMany("DetectedAnomalies")
+                        .HasForeignKey("MediaId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Analyst");
+
+                    b.Navigation("Asset");
+
+                    b.Navigation("Category");
+
+                    b.Navigation("Media");
+                });
+
+            modelBuilder.Entity("UavPms.Core.Entities.EmergencyAlert", b =>
+                {
+                    b.HasOne("UavPms.Core.Entities.DetectedAnomaly", "Anomaly")
+                        .WithMany("EmergencyAlerts")
+                        .HasForeignKey("AnomalyId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("UavPms.Core.Entities.Asset", "Asset")
+                        .WithMany("EmergencyAlerts")
+                        .HasForeignKey("AssetId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("UavPms.Core.Entities.Mission", "Mission")
+                        .WithMany("EmergencyAlerts")
+                        .HasForeignKey("MissionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Anomaly");
+
+                    b.Navigation("Asset");
+
+                    b.Navigation("Mission");
+                });
+
+            modelBuilder.Entity("UavPms.Core.Entities.IncidentReport", b =>
+                {
+                    b.HasOne("UavPms.Core.Entities.Asset", "Asset")
+                        .WithMany("IncidentReports")
+                        .HasForeignKey("AssetId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("UavPms.Core.Entities.Mission", "Mission")
+                        .WithMany("IncidentReports")
+                        .HasForeignKey("MissionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("UavPms.Core.Entities.User", "Reporter")
+                        .WithMany()
+                        .HasForeignKey("ReportedBy")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Asset");
+
+                    b.Navigation("Mission");
+
+                    b.Navigation("Reporter");
+                });
+
+            modelBuilder.Entity("UavPms.Core.Entities.InspectionMedia", b =>
+                {
+                    b.HasOne("UavPms.Core.Entities.Asset", "Asset")
+                        .WithMany("InspectionMedias")
+                        .HasForeignKey("AssetId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("UavPms.Core.Entities.Mission", "Mission")
+                        .WithMany("InspectionMedias")
+                        .HasForeignKey("MissionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Asset");
+
+                    b.Navigation("Mission");
+                });
+
+            modelBuilder.Entity("UavPms.Core.Entities.MaintenanceProof", b =>
+                {
+                    b.HasOne("UavPms.Core.Entities.MaintenanceTicket", "Ticket")
+                        .WithMany("MaintenanceProofs")
+                        .HasForeignKey("TicketId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("UavPms.Core.Entities.User", "Uploader")
+                        .WithMany()
+                        .HasForeignKey("UploadedBy")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Ticket");
+
+                    b.Navigation("Uploader");
+                });
+
+            modelBuilder.Entity("UavPms.Core.Entities.MaintenanceTicket", b =>
+                {
+                    b.HasOne("UavPms.Core.Entities.DetectedAnomaly", "Anomaly")
+                        .WithMany("MaintenanceTickets")
+                        .HasForeignKey("AnomalyId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("UavPms.Core.Entities.Asset", "Asset")
+                        .WithMany("MaintenanceTickets")
+                        .HasForeignKey("AssetId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("UavPms.Core.Entities.User", "Manager")
+                        .WithMany()
+                        .HasForeignKey("ManagerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("UavPms.Core.Entities.User", "Technician")
+                        .WithMany()
+                        .HasForeignKey("TechnicianId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Anomaly");
+
+                    b.Navigation("Asset");
+
+                    b.Navigation("Manager");
+
+                    b.Navigation("Technician");
+                });
+
+            modelBuilder.Entity("UavPms.Core.Entities.MaterialLog", b =>
+                {
+                    b.HasOne("UavPms.Core.Entities.User", "Logger")
+                        .WithMany()
+                        .HasForeignKey("LoggedBy")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("UavPms.Core.Entities.MaintenanceTicket", "Ticket")
+                        .WithMany("MaterialLogs")
+                        .HasForeignKey("TicketId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Logger");
+
+                    b.Navigation("Ticket");
+                });
+
+            modelBuilder.Entity("UavPms.Core.Entities.Mission", b =>
+                {
+                    b.HasOne("UavPms.Core.Entities.User", "Inspector")
+                        .WithMany()
+                        .HasForeignKey("InspectorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("UavPms.Core.Entities.User", "Manager")
+                        .WithMany()
+                        .HasForeignKey("ManagerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("UavPms.Core.Entities.Uav", "Uav")
+                        .WithMany("Missions")
+                        .HasForeignKey("UavId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Inspector");
+
+                    b.Navigation("Manager");
+
+                    b.Navigation("Uav");
+                });
+
+            modelBuilder.Entity("UavPms.Core.Entities.MissionFlightLog", b =>
+                {
+                    b.HasOne("UavPms.Core.Entities.Mission", "Mission")
+                        .WithMany("MissionFlightLogs")
+                        .HasForeignKey("MissionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Mission");
+                });
+
+            modelBuilder.Entity("UavPms.Core.Entities.MissionTargetLine", b =>
+                {
+                    b.HasOne("UavPms.Core.Entities.TransmissionLine", "TransmissionLine")
+                        .WithMany("MissionTargetLines")
+                        .HasForeignKey("LineAssetId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("UavPms.Core.Entities.Mission", "Mission")
+                        .WithMany("MissionTargetLines")
+                        .HasForeignKey("MissionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Mission");
+
+                    b.Navigation("TransmissionLine");
                 });
 
             modelBuilder.Entity("UavPms.Core.Entities.Notification", b =>
                 {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
+                    b.HasOne("UavPms.Core.Entities.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
-                    b.Property<string>("Content")
-                        .IsRequired()
-                        .HasColumnType("text");
+                    b.Navigation("User");
+                });
 
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+            modelBuilder.Entity("UavPms.Core.Entities.Substation", b =>
+                {
+                    b.HasOne("UavPms.Core.Entities.Region", "Region")
+                        .WithMany("Substations")
+                        .HasForeignKey("RegionAssetId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
 
-                    b.Property<bool>("IsRead")
-                        .HasColumnType("boolean");
+                    b.Navigation("Region");
+                });
 
-                    b.Property<string>("Title")
-                        .IsRequired()
-                        .HasColumnType("text");
+            modelBuilder.Entity("UavPms.Core.Entities.Tower", b =>
+                {
+                    b.HasOne("UavPms.Core.Entities.TransmissionLine", "TransmissionLine")
+                        .WithMany("Towers")
+                        .HasForeignKey("LineAssetId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
 
-                    b.Property<string>("Type")
-                        .IsRequired()
-                        .HasColumnType("text");
+                    b.Navigation("TransmissionLine");
+                });
 
-                    b.Property<string>("UserId")
-                        .IsRequired()
-                        .HasColumnType("text");
+            modelBuilder.Entity("UavPms.Core.Entities.TransmissionLine", b =>
+                {
+                    b.HasOne("UavPms.Core.Entities.Substation", "Substation")
+                        .WithMany("TransmissionLines")
+                        .HasForeignKey("SubstationAssetId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
 
-                    b.HasKey("Id");
-
-                    b.ToTable("Notifications");
+                    b.Navigation("Substation");
                 });
 
             modelBuilder.Entity("UavPms.Core.Entities.UserRole", b =>
                 {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<bool>("IsDeleted")
-                        .HasColumnType("boolean");
-
-                    b.Property<Guid>("RoleId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid>("UserId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("RoleId");
-
-                    b.HasIndex("UserId");
-
-                    b.ToTable("UserRoles");
-                });
-
-            modelBuilder.Entity("UavPms.Core.Entities.DetectionAlert", b =>
-                {
-                    b.HasOne("UavPms.Core.Entities.Drone", "Drone")
-                        .WithMany("DetectionAlerts")
-                        .HasForeignKey("DroneId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.OwnsOne("UavPms.Core.ValueObjects.BoundingBox", "Bbox", b1 =>
-                        {
-                            b1.Property<Guid>("DetectionAlertId")
-                                .HasColumnType("uuid");
-
-                            b1.Property<double>("Height")
-                                .HasColumnType("double precision")
-                                .HasColumnName("Bbox_Height");
-
-                            b1.Property<double>("Width")
-                                .HasColumnType("double precision")
-                                .HasColumnName("Bbox_Width");
-
-                            b1.Property<double>("X")
-                                .HasColumnType("double precision")
-                                .HasColumnName("Bbox_X");
-
-                            b1.Property<double>("Y")
-                                .HasColumnType("double precision")
-                                .HasColumnName("Bbox_Y");
-
-                            b1.HasKey("DetectionAlertId");
-
-                            b1.ToTable("DetectionAlerts");
-
-                            b1.WithOwner()
-                                .HasForeignKey("DetectionAlertId");
-                        });
-
-                    b.Navigation("Bbox");
-
-                    b.Navigation("Drone");
-                });
-
-            modelBuilder.Entity("UavPms.Core.Entities.DroneTelemetry", b =>
-                {
-                    b.HasOne("UavPms.Core.Entities.Drone", "Drone")
-                        .WithMany("Telemetries")
-                        .HasForeignKey("DroneId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Drone");
-                });
-
-            modelBuilder.Entity("UavPms.Core.Entities.EvidenceImage", b =>
-                {
-                    b.HasOne("UavPms.Core.Entities.DetectionAlert", "DetectionAlert")
-                        .WithOne("EvidenceImage")
-                        .HasForeignKey("UavPms.Core.Entities.EvidenceImage", "DetectionAlertId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("DetectionAlert");
-                });
-
-            modelBuilder.Entity("UavPms.Core.Entities.UserRole", b =>
-                {
-                    b.HasOne("UavPms.Core.Entities.AppRole", "Role")
+                    b.HasOne("UavPms.Core.Entities.Role", "Role")
                         .WithMany("UserRoles")
                         .HasForeignKey("RoleId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("UavPms.Core.Entities.AppUser", "User")
+                    b.HasOne("UavPms.Core.Entities.User", "User")
                         .WithMany("UserRoles")
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
@@ -377,26 +1614,98 @@ namespace UavPms.Infrastructure.Migrations
                     b.Navigation("User");
                 });
 
-            modelBuilder.Entity("UavPms.Core.Entities.AppRole", b =>
+            modelBuilder.Entity("UavPms.Core.Entities.Asset", b =>
+                {
+                    b.Navigation("DetectedAnomalies");
+
+                    b.Navigation("EmergencyAlerts");
+
+                    b.Navigation("HealthHistories");
+
+                    b.Navigation("IncidentReports");
+
+                    b.Navigation("InspectionMedias");
+
+                    b.Navigation("MaintenanceTickets");
+                });
+
+            modelBuilder.Entity("UavPms.Core.Entities.DefectCategory", b =>
+                {
+                    b.Navigation("DetectedAnomalies");
+                });
+
+            modelBuilder.Entity("UavPms.Core.Entities.DetectedAnomaly", b =>
+                {
+                    b.Navigation("EmergencyAlerts");
+
+                    b.Navigation("MaintenanceTickets");
+                });
+
+            modelBuilder.Entity("UavPms.Core.Entities.EmergencyAlert", b =>
+                {
+                    b.Navigation("AlertEscalations");
+                });
+
+            modelBuilder.Entity("UavPms.Core.Entities.InspectionMedia", b =>
+                {
+                    b.Navigation("DetectedAnomalies");
+                });
+
+            modelBuilder.Entity("UavPms.Core.Entities.MaintenanceTicket", b =>
+                {
+                    b.Navigation("MaintenanceProofs");
+
+                    b.Navigation("MaterialLogs");
+                });
+
+            modelBuilder.Entity("UavPms.Core.Entities.Mission", b =>
+                {
+                    b.Navigation("EmergencyAlerts");
+
+                    b.Navigation("IncidentReports");
+
+                    b.Navigation("InspectionMedias");
+
+                    b.Navigation("MissionFlightLogs");
+
+                    b.Navigation("MissionTargetLines");
+                });
+
+            modelBuilder.Entity("UavPms.Core.Entities.Region", b =>
+                {
+                    b.Navigation("Substations");
+                });
+
+            modelBuilder.Entity("UavPms.Core.Entities.Role", b =>
                 {
                     b.Navigation("UserRoles");
                 });
 
-            modelBuilder.Entity("UavPms.Core.Entities.AppUser", b =>
+            modelBuilder.Entity("UavPms.Core.Entities.Substation", b =>
+                {
+                    b.Navigation("TransmissionLines");
+                });
+
+            modelBuilder.Entity("UavPms.Core.Entities.Tower", b =>
+                {
+                    b.Navigation("Assets");
+                });
+
+            modelBuilder.Entity("UavPms.Core.Entities.TransmissionLine", b =>
+                {
+                    b.Navigation("MissionTargetLines");
+
+                    b.Navigation("Towers");
+                });
+
+            modelBuilder.Entity("UavPms.Core.Entities.Uav", b =>
+                {
+                    b.Navigation("Missions");
+                });
+
+            modelBuilder.Entity("UavPms.Core.Entities.User", b =>
                 {
                     b.Navigation("UserRoles");
-                });
-
-            modelBuilder.Entity("UavPms.Core.Entities.DetectionAlert", b =>
-                {
-                    b.Navigation("EvidenceImage");
-                });
-
-            modelBuilder.Entity("UavPms.Core.Entities.Drone", b =>
-                {
-                    b.Navigation("DetectionAlerts");
-
-                    b.Navigation("Telemetries");
                 });
 #pragma warning restore 612, 618
         }

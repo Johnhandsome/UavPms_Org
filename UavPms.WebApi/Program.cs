@@ -9,6 +9,13 @@ using Hangfire;
 using Hangfire.PostgreSql;
 using Microsoft.EntityFrameworkCore;
 using UavPms.Infrastructure.Persistence;
+using UavPms.Application;
+using UavPms.WebApi.Middlewares;
+using Asp.Versioning;
+using Asp.Versioning.ApiExplorer;
+using UavPms.WebApi.Swagger;
+using Microsoft.Extensions.Options; 
+using Swashbuckle.AspNetCore.SwaggerGen;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -18,15 +25,34 @@ builder.Host.UseSerilog((context, loggerConfig) =>
     loggerConfig.WriteTo.Console(); // Viết log ra màn hình Terminal
 });
 
-//  ĐĂNG KÝ SERVICES VÀO DI CONTAINER
+// ĐĂNG KÝ SERVICES VÀO DI CONTAINER
 // ĐĂNG KÝ CONTROLLER
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
+
+// Cấu hình API Versioning 
+builder.Services.AddApiVersioning(options =>
+    {
+        options.DefaultApiVersion = new ApiVersion(1, 0);
+        options.AssumeDefaultVersionWhenUnspecified = true;
+        options.ReportApiVersions = true;
+        options.ApiVersionReader = new UrlSegmentApiVersionReader();
+    })
+    .AddApiExplorer(options =>
+    {
+        options.GroupNameFormat = "'v'VVV";
+        options.SubstituteApiVersionInUrl = true;
+    });
+
+// Đăng ký dịch vụ cấu hình Swagger tự động theo phiên bản
+builder.Services.AddTransient<IConfigureOptions<SwaggerGenOptions>, ConfigureSwaggerOptions>();
 builder.Services.AddSwaggerGen();
 builder.Services.AddInfrastructureServices(builder.Configuration);
+builder.Services.AddApplicationServices();
 
-
-builder.Services.AddScoped<INotificationRepository, NotificationRepository>();
+//Global Exception Handler
+builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
+builder.Services.AddProblemDetails();
 
 //Consumers
 builder.Services.AddHostedService<MissionCreatedConsumer>();
@@ -35,8 +61,11 @@ builder.Services.AddHostedService<DefectDetectedConsumer>();
 //Hangfire
 builder.Services.AddHangfire(config =>
 {
-    config.UsePostgreSqlStorage(options =>
-        options.UseNpgsqlConnection(builder.Configuration.GetConnectionString("DefaultConnection")));
+   config.UsePostgreSqlStorage(options =>
+       options.UseNpgsqlConnection(builder.Configuration.GetConnectionString("DefaultConnection")),
+       new PostgreSqlStorageOptions{
+        PrepareSchemaIfNecessary = true
+       });
 });
 
 builder.Services.AddHangfireServer();
@@ -56,25 +85,29 @@ builder.Services.AddCors(options =>
 // XÂY DỰNG ỨNG DỤNG VÀ CẤU HÌNH MIDDLEWARE PIPELINE    
 var app = builder.Build();
 
+// Global Exception Handler
+app.UseExceptionHandler();
+
 // Cấu hình môi trường Development (bật swagger)
-if (app.Environment.IsDevelopment())
-{
-    app.UseSwagger();
-    app.UseSwaggerUI();
-}
-
 // Hangfire Dashboard (Development-only for security)
-if (app.Environment.IsDevelopment())
-{
-    app.UseHangfireDashboard();
-}
-
 // Tự động chạy Migration khi khởi động (dev-only)
 if (app.Environment.IsDevelopment())
 {
+    app.UseSwagger();
+    app.UseSwaggerUI(options =>
+    {
+        var provider = app.Services.GetRequiredService<IApiVersionDescriptionProvider>();
+        foreach (var description in provider.ApiVersionDescriptions)
+        {
+            options.SwaggerEndpoint($"/swagger/{description.GroupName}/swagger.json", description.GroupName.ToUpperInvariant());
+        }
+    });
+    app.UseHangfireDashboard();
+
     using var scope = app.Services.CreateScope();
     var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
     dbContext.Database.Migrate();
+    await DatabaseSeeder.SeedAsync(dbContext);
 }
 
 // Đăng ký các Hangfire Recurring Jobs
@@ -125,6 +158,7 @@ app.UseStaticFiles(new StaticFileOptions
     RequestPath = "/images"
 });
 
+app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 app.Run();  

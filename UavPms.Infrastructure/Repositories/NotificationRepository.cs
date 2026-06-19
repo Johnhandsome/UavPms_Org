@@ -11,11 +11,11 @@ public class NotificationRepository : GenericRepository<Notification>, INotifica
     {
     }
 
-    public async Task<List<Notification>> GetByUserAsync(string userId)
+    public async Task<List<Notification>> GetByUserAsync(Guid userId)
     {
         return await _context.Notifications
             .Where(x => x.UserId == userId)
-            .OrderByDescending(x => x.CreatedAt)
+            .OrderByDescending(x => x.SentAt)
             .ToListAsync();
     }
 
@@ -27,7 +27,5 @@ public class NotificationRepository : GenericRepository<Notification>, INotifica
             return;
 
         notification.IsRead = true;
-
-        await _context.SaveChangesAsync();
     }
 }
