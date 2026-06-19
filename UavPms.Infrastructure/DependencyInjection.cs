@@ -28,8 +28,8 @@ public static class DependencyInjection
                 });
         });
         
-        // Đăng ký RabbitMQ Connection helper dưới dạng Singleton
-        services.AddSingleton<RabbitMqConnection>();
+        // Đăng ký RabbitMQ Connection helper dưới dạng Singleton (Tạm thời tắt để chạy offline)
+        // services.AddSingleton<RabbitMqConnection>();
 
         // Đăng ký Unit of Work và Generic Repository
         services.AddScoped<IUnitOfWork, UnitOfWork>();
@@ -53,7 +53,7 @@ public static class DependencyInjection
         services.AddHttpContextAccessor();
         services.AddScoped<ICurrentUserServices, CurrentUserServices>();
 
-        // Đăng ký các Dịch vụ OTP, Email (SendGrid) và Event Publisher (RabbitMQ)
+        // Đăng ký các Dịch vụ OTP, Email (SendGrid) và Event Publisher
         services.AddMemoryCache();
         services.AddScoped<IEmailService, EmailService>();
 
@@ -71,7 +71,7 @@ public static class DependencyInjection
         }
 
         services.AddScoped<IOtpService, RedisOtpService>();
-        services.AddScoped<IEventPublisher, RabbitMqEventPublisher>();
+        services.AddScoped<IEventPublisher, NoOpEventPublisher>();
 
         // Đăng ký OTP Purpose Handlers (Strategy pattern)
         services.AddScoped<IOtpPurposeHandler, UavPms.Infrastructure.Services.OtpHandlers.LoginOtpHandler>();

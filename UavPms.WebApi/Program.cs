@@ -65,21 +65,21 @@ builder.Services.AddApplicationServices();
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddProblemDetails();
 
-//Consumers
-builder.Services.AddHostedService<MissionCreatedConsumer>();
-builder.Services.AddHostedService<DefectDetectedConsumer>();
+//Consumers (Tạm thời tắt để chạy offline)
+// builder.Services.AddHostedService<MissionCreatedConsumer>();
+// builder.Services.AddHostedService<DefectDetectedConsumer>();
 
-//Hangfire
-builder.Services.AddHangfire(config =>
-{
-   config.UsePostgreSqlStorage(options =>
-       options.UseNpgsqlConnection(builder.Configuration.GetConnectionString("DefaultConnection")),
-       new PostgreSqlStorageOptions{
-        PrepareSchemaIfNecessary = true
-       });
-});
+//Hangfire (Tạm thời tắt để chạy offline)
+// builder.Services.AddHangfire(config =>
+// {
+//    config.UsePostgreSqlStorage(options =>
+//        options.UseNpgsqlConnection(builder.Configuration.GetConnectionString("DefaultConnection")),
+//        new PostgreSqlStorageOptions{
+//         PrepareSchemaIfNecessary = true
+//        });
+// });
 
-builder.Services.AddHangfireServer();
+// builder.Services.AddHangfireServer();
 
 // CẤU HÌNH CORS POLICY 
 builder.Services.AddCors(options =>
@@ -113,7 +113,7 @@ if (app.Environment.IsDevelopment())
             options.SwaggerEndpoint($"/swagger/{description.GroupName}/swagger.json", description.GroupName.ToUpperInvariant());
         }
     });
-    app.UseHangfireDashboard();
+    // app.UseHangfireDashboard();
 
     using var scope = app.Services.CreateScope();
     var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
@@ -121,21 +121,21 @@ if (app.Environment.IsDevelopment())
     await DatabaseSeeder.SeedAsync(dbContext);
 }
 
-// Đăng ký các Hangfire Recurring Jobs
-using (var scope = app.Services.CreateScope())
-{
-    var recurringJobManager = scope.ServiceProvider.GetRequiredService<IRecurringJobManager>();
-    
-    recurringJobManager.AddOrUpdate<CleanupJob>(
-        "auto-cleanup-job",
-        job => job.Execute(),
-        Cron.Daily);
-
-    recurringJobManager.AddOrUpdate<DailySummaryJob>(
-        "daily-summary-job",
-        job => job.Execute(),
-        Cron.Daily);
-}
+// Đăng ký các Hangfire Recurring Jobs (Tạm thời tắt để chạy offline)
+// using (var scope = app.Services.CreateScope())
+// {
+//     var recurringJobManager = scope.ServiceProvider.GetRequiredService<IRecurringJobManager>();
+//     
+//     recurringJobManager.AddOrUpdate<CleanupJob>(
+//         "auto-cleanup-job",
+//         job => job.Execute(),
+//         Cron.Daily);
+// 
+//     recurringJobManager.AddOrUpdate<DailySummaryJob>(
+//         "daily-summary-job",
+//         job => job.Execute(),
+//         Cron.Daily);
+// }
 
 app.UseHttpsRedirection();
 
