@@ -52,6 +52,19 @@ public static class DependencyInjection
         // Đăng ký HttpContextAccessor và CurrentUserServices
         services.AddHttpContextAccessor();
         services.AddScoped<ICurrentUserServices, CurrentUserServices>();
+
+        // Đăng ký các Dịch vụ OTP, Email (SendGrid) và Event Publisher (RabbitMQ)
+        services.AddMemoryCache();
+        services.AddScoped<IEmailService, EmailService>();
+        services.AddScoped<IOtpService, OtpService>();
+        services.AddScoped<IEventPublisher, RabbitMqEventPublisher>();
+
+        // Đăng ký OTP Purpose Handlers (Strategy pattern)
+        services.AddScoped<IOtpPurposeHandler, UavPms.Infrastructure.Services.OtpHandlers.LoginOtpHandler>();
+        services.AddScoped<IOtpPurposeHandler, UavPms.Infrastructure.Services.OtpHandlers.ForgotPasswordOtpHandler>();
+        services.AddScoped<IOtpPurposeHandler, UavPms.Infrastructure.Services.OtpHandlers.EmailVerificationOtpHandler>();
+        services.AddScoped<IOtpPurposeHandler, UavPms.Infrastructure.Services.OtpHandlers.ChangeEmailOtpHandler>();
+        services.AddScoped<IOtpPurposeHandler, UavPms.Infrastructure.Services.OtpHandlers.ChangePasswordOtpHandler>();
         
         return services;
     }

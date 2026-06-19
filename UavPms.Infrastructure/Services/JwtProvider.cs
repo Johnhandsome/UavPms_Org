@@ -65,4 +65,37 @@ public class JwtProvider : IJwtProvider
         rng.GetBytes(randomNumber);
         return Convert.ToBase64String(randomNumber);
     }
+
+    public string GenerateStepUpToken(User user, string purpose)
+    {
+        var secretKey = _configuration["Jwt:SecretKey"]
+            ?? throw new InvalidOperationException("Jwt:SecretKey is not configured.");
+        var issuer = _configuration["Jwt:Issuer"]
+            ?? throw new InvalidOperationException("Jwt:Issuer is not configured.");
+        var audience = _configuration["Jwt:Audience"]
+            ?? throw new InvalidOperationException("Jwt:Audience is not configured.");
+
+        // Step-up token is short-lived (e.g. 5 minutes)
+        var expiryMinutes = 5;
+
+        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey));
+        var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+
+        var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString();
+        var claims = new List<Claim>
+        {
+            new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
+            new Claim("step_up_verified_at", now),
+            new Claim("step_up_purpose", purpose)
+        };
+
+        var token = new JwtSecurityToken(
+            issuer: issuer,
+            audience: audience,
+            claims: claims,
+            expires: DateTime.UtcNow.AddMinutes(expiryMinutes),
+            signingCredentials: credentials);
+
+        return new JwtSecurityTokenHandler().WriteToken(token);
+    }
 }

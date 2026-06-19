@@ -35,7 +35,8 @@ builder.Services.AddControllers(options =>
 .AddXmlSerializerFormatters() // Thêm định dạng chuyển đổi dữ liệu định dạng XML
 .AddJsonOptions(options =>
 {
-    options.JsonSerializerOptions.PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase; // Chuẩn hõa CamelCase cho Json
+    options.JsonSerializerOptions.PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase;
+    options.JsonSerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter());
 });
 
 builder.Services.AddEndpointsApiExplorer();

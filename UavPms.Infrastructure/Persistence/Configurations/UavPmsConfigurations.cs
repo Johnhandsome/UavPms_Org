@@ -435,3 +435,18 @@ public class AuditLogConfiguration : IEntityTypeConfiguration<AuditLog>
             .OnDelete(DeleteBehavior.Restrict);
     }
 }
+
+public class PasswordResetTokenConfiguration : IEntityTypeConfiguration<PasswordResetToken>
+{
+    public void Configure(EntityTypeBuilder<PasswordResetToken> builder)
+    {
+        builder.ToTable("PasswordResetTokens");
+        builder.HasKey(e => e.Id);
+
+        builder.HasOne(e => e.User)
+            .WithMany()
+            .HasForeignKey(e => e.UserId)
+            .OnDelete(DeleteBehavior.Cascade);
+    }
+}
+

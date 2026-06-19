@@ -30,6 +30,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<MaterialLog> MaterialLogs => Set<MaterialLog>();
     public DbSet<Notification> Notifications => Set<Notification>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
+    public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
 
     public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options) : base(options) {}
 
