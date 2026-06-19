@@ -64,11 +64,9 @@ public class AuthController : ControllerBase
         return Convert.ToBase64String(hashBytes);
     }
 
-    private async Task<TrustedDevice?> GetValidTrustedDeviceAsync(Guid userId, string? requestDeviceToken = null)
+    private async Task<TrustedDevice?> GetValidTrustedDeviceAsync(Guid userId)
     {
-        var deviceToken = requestDeviceToken 
-            ?? Request.Cookies["device_trust_token"] 
-            ?? Request.Headers["X-Device-Trust-Token"].ToString();
+        var deviceToken = Request.Cookies["device_trust_token"] ?? Request.Headers["X-Device-Trust-Token"].ToString();
 
         if (string.IsNullOrEmpty(deviceToken)) return null;
 
@@ -104,11 +102,14 @@ public class AuthController : ControllerBase
 
         if (!string.IsNullOrEmpty(deviceTrustToken))
         {
+            var env = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
+            var isDev = string.IsNullOrEmpty(env) || env.Equals("Development", StringComparison.OrdinalIgnoreCase);
+
             var cookieOptions = new CookieOptions
             {
                 HttpOnly = true,
-                Secure = Request.IsHttps,
-                SameSite = SameSiteMode.Strict,
+                Secure = !isDev,
+                SameSite = isDev ? SameSiteMode.Lax : SameSiteMode.None,
                 Expires = DateTime.UtcNow.AddDays(30)
             };
             Response.Cookies.Append("device_trust_token", deviceTrustToken, cookieOptions);
@@ -146,7 +147,7 @@ public class AuthController : ControllerBase
         if (!user.IsEmailVerified)
             return BadRequest(new ApiResponse(false, "Email not verified"));
 
-        var trustedDevice = await GetValidTrustedDeviceAsync(user.Id, request.DeviceTrustToken);
+        var trustedDevice = await GetValidTrustedDeviceAsync(user.Id);
 
         if (trustedDevice != null)
         {
@@ -156,9 +157,7 @@ public class AuthController : ControllerBase
             await _trustedDeviceRepository.UpdateAsync(trustedDevice);
             await _unitOfWork.SaveChangesAsync();
 
-            var deviceTrustToken = request.DeviceTrustToken 
-                ?? Request.Cookies["device_trust_token"] 
-                ?? Request.Headers["X-Device-Trust-Token"].ToString();
+            var deviceTrustToken = Request.Cookies["device_trust_token"] ?? Request.Headers["X-Device-Trust-Token"].ToString();
             return await IssueAuthenticationResponseAsync(user, deviceTrustToken);
         }
 
@@ -427,7 +426,7 @@ public class AuthController : ControllerBase
         return Ok(new ApiResponse(true, "Success"));
     }
 
-    public record LoginRequest(string Email, string Password, string? DeviceTrustToken = null);
+    public record LoginRequest(string Email, string Password);
     public record RefreshTokenRequest(string RefreshToken);
     public record SendOtpRequest(string? Email, OtpPurpose Purpose);
     public record VerifyOtpRequest(string? Email, string Otp, OtpPurpose Purpose);
