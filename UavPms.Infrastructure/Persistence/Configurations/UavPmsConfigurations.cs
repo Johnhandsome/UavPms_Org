@@ -450,3 +450,18 @@ public class PasswordResetTokenConfiguration : IEntityTypeConfiguration<Password
     }
 }
 
+public class TrustedDeviceConfiguration : IEntityTypeConfiguration<TrustedDevice>
+{
+    public void Configure(EntityTypeBuilder<TrustedDevice> builder)
+    {
+        builder.ToTable("TrustedDevices");
+        builder.HasKey(e => e.Id);
+
+        builder.HasOne(e => e.User)
+            .WithMany()
+            .HasForeignKey(e => e.UserId)
+            .OnDelete(DeleteBehavior.Cascade);
+    }
+}
+
+

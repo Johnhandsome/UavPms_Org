@@ -65,6 +65,7 @@ public static class DependencyInjection
         services.AddScoped<IOtpPurposeHandler, UavPms.Infrastructure.Services.OtpHandlers.EmailVerificationOtpHandler>();
         services.AddScoped<IOtpPurposeHandler, UavPms.Infrastructure.Services.OtpHandlers.ChangeEmailOtpHandler>();
         services.AddScoped<IOtpPurposeHandler, UavPms.Infrastructure.Services.OtpHandlers.ChangePasswordOtpHandler>();
+        services.AddScoped<IOtpPurposeHandler, UavPms.Infrastructure.Services.OtpHandlers.DeleteAccountOtpHandler>();
         
         return services;
     }

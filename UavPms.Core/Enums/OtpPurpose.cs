@@ -6,5 +6,6 @@ public enum OtpPurpose
     ForgotPassword,
     EmailVerification,
     ChangePassword,
-    ChangeEmail
+    ChangeEmail,
+    DeleteAccount
 }

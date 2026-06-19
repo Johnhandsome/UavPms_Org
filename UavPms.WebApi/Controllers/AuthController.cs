@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Http;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -32,6 +33,7 @@ public class AuthController : ControllerBase
     private readonly IMemoryCache _cache;
     private readonly IEnumerable<IOtpPurposeHandler> _otpHandlers;
     private readonly IGenericRepository<PasswordResetToken> _passwordResetTokenRepository;
+    private readonly IGenericRepository<TrustedDevice> _trustedDeviceRepository;
 
     public AuthController(
         IUserRepository userRepository,
@@ -44,7 +46,8 @@ public class AuthController : ControllerBase
         IEventPublisher eventPublisher,
         IMemoryCache cache,
         IEnumerable<IOtpPurposeHandler> otpHandlers,
-        IGenericRepository<PasswordResetToken> passwordResetTokenRepository)
+        IGenericRepository<PasswordResetToken> passwordResetTokenRepository,
+        IGenericRepository<TrustedDevice> trustedDeviceRepository)
     {
         _userRepository = userRepository;
         _passwordHasher = passwordHasher;
@@ -57,6 +60,7 @@ public class AuthController : ControllerBase
         _cache = cache;
         _otpHandlers = otpHandlers;
         _passwordResetTokenRepository = passwordResetTokenRepository;
+        _trustedDeviceRepository = trustedDeviceRepository;
     }
     
     private static string HashToken(string token){
@@ -65,15 +69,85 @@ public class AuthController : ControllerBase
         return Convert.ToBase64String(hashBytes);
     }
 
+    private async Task<TrustedDevice?> GetValidTrustedDeviceAsync(Guid userId)
+    {
+        string? deviceTrustToken = Request.Cookies["device_trust_token"];
+        if (string.IsNullOrEmpty(deviceTrustToken))
+        {
+            deviceTrustToken = Request.Headers["X-Device-Trust-Token"].ToString();
+        }
+
+        if (string.IsNullOrEmpty(deviceTrustToken))
+        {
+            return null;
+        }
+
+        var tokenHash = HashToken(deviceTrustToken);
+        var devices = await _trustedDeviceRepository.FindAsync(
+            d => d.UserId == userId && d.DeviceTokenHash == tokenHash && d.ExpiresAt > DateTime.UtcNow,
+            track: true);
+
+        return devices.FirstOrDefault();
+    }
+
+    private async Task<IActionResult> IssueAuthenticationResponseAsync(User user, string? deviceTrustToken = null)
+    {
+        var roles = user.UserRoles.Select(ur => ur.Role!.RoleName).ToList();
+        var accessToken = _jwtProvider.GenerateAccessToken(user, roles);
+        var refreshToken = _jwtProvider.GenerateRefreshToken();
+
+        var expiryMinutesStr = _configuration["Jwt:ExpiryMinutes"] ?? "60";
+        double.TryParse(expiryMinutesStr, out var expiryMinutes);
+        if (expiryMinutes <= 0) expiryMinutes = 60;
+        var expriesInSeconds = (int)(expiryMinutes * 60);
+
+        user.RefreshToken = HashToken(refreshToken);
+        user.RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(7);
+        await _unitOfWork.SaveChangesAsync();
+
+        if (!string.IsNullOrEmpty(deviceTrustToken))
+        {
+            var cookieOptions = new CookieOptions
+            {
+                HttpOnly = true,
+                Secure = true,
+                SameSite = SameSiteMode.Strict,
+                Expires = DateTime.UtcNow.AddDays(30)
+            };
+            Response.Cookies.Append("device_trust_token", deviceTrustToken, cookieOptions);
+        }
+
+        return Ok(new ApiResponse(true, "Login successful.", new
+        {
+            AccessToken = accessToken,
+            RefreshToken = refreshToken,
+            TokenType = "Bearer",
+            ExpiresIn = expriesInSeconds,
+            User = new 
+            {
+                user.Id,
+                user.Username,
+                user.Email,
+                user.FullName,
+                Roles = roles
+            }
+        }));
+    }
+
     [HttpPost("login")]
     public async Task<IActionResult> Login([FromBody] LoginRequest request)
     {
-        if (request == null || string.IsNullOrEmpty(request.Username) || string.IsNullOrEmpty(request.Password))
+        if (request == null || string.IsNullOrEmpty(request.Email) || string.IsNullOrEmpty(request.Password))
         {
-            return BadRequest(new ApiResponse(false, "Username and Password are required."));
+            return BadRequest(new ApiResponse(false, "Email and Password are required."));
         }
 
-        var user = await _userRepository.GetByUsernameWithRolesAsync(request.Username);
+        var user = await _userRepository.GetByEmailWithRolesAsync(request.Email);
+        if (user == null)
+        {
+            user = await _userRepository.GetByUsernameWithRolesAsync(request.Email);
+        }
+
         if (user == null || user.Status != "Active")
         {
             return BadRequest(new ApiResponse(false, "Invalid credentials or inactive account."));
@@ -84,13 +158,38 @@ public class AuthController : ControllerBase
             return BadRequest(new ApiResponse(false, "Invalid credentials."));
         }
 
+        if (!user.IsEmailVerified)
+        {
+            return BadRequest(new ApiResponse(false, "Please verify your email address before logging in."));
+        }
+
+        // Check trusted device
+        var trustedDevice = await GetValidTrustedDeviceAsync(user.Id);
+        if (trustedDevice != null)
+        {
+            // sliding expiry: update ExpiresAt and LastUsedAt
+            trustedDevice.LastUsedAt = DateTime.UtcNow;
+            trustedDevice.ExpiresAt = DateTime.UtcNow.AddDays(30);
+            await _trustedDeviceRepository.UpdateAsync(trustedDevice);
+            await _unitOfWork.SaveChangesAsync();
+
+            var deviceTrustToken = Request.Cookies["device_trust_token"];
+            if (string.IsNullOrEmpty(deviceTrustToken))
+            {
+                deviceTrustToken = Request.Headers["X-Device-Trust-Token"].ToString();
+            }
+
+            return await IssueAuthenticationResponseAsync(user, deviceTrustToken);
+        }
+
+        // Send OTP for Login
         var otpResult = await _otpService.GenerateAndSendOtpAsync(user.Email, OtpPurpose.Login);
         if (!otpResult.Success)
         {
             return BadRequest(new ApiResponse(false, otpResult.Message));
         }
 
-        return Ok(new ApiResponse(true, "An OTP code has been sent to your email. Please verify it to complete your login.", new
+        return Ok(new ApiResponse(true, "OTP verification required.", new
         {
             OtpRequired = true,
             Email = user.Email
@@ -238,34 +337,18 @@ public class AuthController : ControllerBase
         switch (request.Purpose)
         {
             case OtpPurpose.Login:
-                var roles = user.UserRoles.Select(ur => ur.Role!.RoleName).ToList();
-                var accessToken = _jwtProvider.GenerateAccessToken(user, roles);
-                var refreshToken = _jwtProvider.GenerateRefreshToken();
-
-                var expiryMinutesStr = _configuration["Jwt:ExpiryMinutes"] ?? "60";
-                double.TryParse(expiryMinutesStr, out var expiryMinutes);
-                if (expiryMinutes <= 0) expiryMinutes = 60;
-                var expriesInSeconds = (int)(expiryMinutes * 60);
-
-                user.RefreshToken = HashToken(refreshToken);
-                user.RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(7);
-                await _unitOfWork.SaveChangesAsync();
-
-                return Ok(new ApiResponse(true, "Login successful.", new
+                var newDeviceTrustToken = Guid.NewGuid().ToString("N");
+                var tokenHash = HashToken(newDeviceTrustToken);
+                var trustedDevice = new TrustedDevice
                 {
-                    AccessToken = accessToken,
-                    RefreshToken = refreshToken,
-                    TokenType = "Bearer",
-                    ExpiresIn = expriesInSeconds,
-                    User = new 
-                    {
-                        user.Id,
-                        user.Username,
-                        user.Email,
-                        user.FullName,
-                        Roles = roles
-                    }
-                }));
+                    UserId = user.Id,
+                    DeviceTokenHash = tokenHash,
+                    ExpiresAt = DateTime.UtcNow.AddDays(30),
+                    LastUsedAt = DateTime.UtcNow,
+                    UserAgent = Request.Headers["User-Agent"].ToString()
+                };
+                await _trustedDeviceRepository.AddAsync(trustedDevice);
+                return await IssueAuthenticationResponseAsync(user, newDeviceTrustToken);
 
             case OtpPurpose.ForgotPassword:
                 var verificationToken = Guid.NewGuid().ToString("N");
@@ -289,6 +372,7 @@ public class AuthController : ControllerBase
 
             case OtpPurpose.ChangePassword:
             case OtpPurpose.ChangeEmail:
+            case OtpPurpose.DeleteAccount:
                 var stepUpToken = _jwtProvider.GenerateStepUpToken(user, request.Purpose.ToString());
                 return Ok(new ApiResponse(true, "OTP verified successfully for sensitive action.", new
                 {
@@ -405,7 +489,7 @@ public class AuthController : ControllerBase
     }
 }
 
-public record LoginRequest(string Username, string Password);
+public record LoginRequest(string Email, string Password);
 public record RefreshTokenRequest(string RefreshToken);
 public record SendOtpRequest(string? Email, OtpPurpose Purpose);
 public record VerifyOtpRequest(string? Email, string Otp, OtpPurpose Purpose);
