@@ -79,7 +79,7 @@
   - Triển khai `BCryptPasswordHasher` để mã hoá bảo mật mật khẩu người dùng.
   - Triển khai `JwtProvider` sinh JWT Token đính kèm Claims chi tiết (UserId, Username, Roles).
 - [X] 21. **Current User Service**: Viết `CurrentUserService` lấy thông tin `UserId` và `Roles` từ `HttpContext.User` của HTTP request hiện tại.
-- [ ] 21b. **Global Exception Handling Middleware**:
+- [X] 21b. **Global Exception Handling Middleware**:
   - Triển khai Middleware bắt lỗi tập trung (Global Exception Handler) sử dụng tiêu chuẩn `ProblemDetails` (RFC 7807) của .NET.
   - Tự động bắt lỗi `ValidationException` từ MediatR/FluentValidation để format về dạng `400 Bad Request` chứa chi tiết các trường bị lỗi.
 - [ ] 21c. **API Versioning & Swagger Integration**:
@@ -96,6 +96,15 @@
 ### Phase 3.1: API Xác thực & Phân quyền (RBAC)
 - [x] 22. **Lệnh Đăng nhập (`LoginCommand` / `POST /login`)**: Kiểm tra tài khoản, đối chiếu hash mật khẩu, trả về Access Token và Refresh Token.
 - [x] 22b. **Lệnh Làm mới Token (`RefreshTokenCommand` / `POST /refresh-token`)**: Kiểm tra Refresh Token còn hạn trong database để cấp lại cặp token mới và hỗ trợ thu hồi.
+- [ ] 22c. **Tách bảng `RefreshTokens` hỗ trợ Multi-Device Session**:
+  - Tạo entity `RefreshToken` riêng biệt với các trường: `Id`, `UserId`, `TokenHash`, `ExpiresAt`, `CreatedAt`, `RevokedAt`, `DeviceInfo`.
+  - Xoá 2 cột `RefreshToken` và `RefreshTokenExpiryTime` khỏi bảng `Users`.
+  - Hỗ trợ nhiều phiên đăng nhập đồng thời trên nhiều thiết bị (không ghi đè token cũ khi đăng nhập thiết bị mới).
+  - Hỗ trợ chức năng thu hồi token theo session (logout từng thiết bị) và cải thiện khả năng kiểm toán bảo mật.
+- [ ] 22d. **Refactor Auth sang CQRS Pattern (Clean Architecture)**:
+  - Chuyển toàn bộ business logic từ `AuthController` sang Application layer dưới dạng `LoginCommand` + `LoginCommandHandler`, `RefreshTokenCommand` + `RefreshTokenCommandHandler`.
+  - Controller chỉ giữ vai trò điều phối HTTP → gọi `_mediator.Send(command)` → trả về kết quả.
+  - Tạo `AuthResultDto` cho kết quả trả về, xử lý `UnauthorizedAccessException` trong `GlobalExceptionHandler`.
 - [ ] 23. **Truy vấn Profile cá nhân (`GetMyProfileQuery`)**: Lấy thông tin tài khoản hiện tại dựa trên token gửi lên.
 - [ ] 24. **Cấu hình JwtBearerAuthentication**: Đăng ký Middleware xác thực JWT trong `Program.cs`. Thiết lập các Policy bảo vệ API dựa trên các vai trò: `SystemAdmin`, `Manager`, `Inspector`, `Analyst`, `Technician`.
 

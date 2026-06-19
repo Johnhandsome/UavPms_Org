@@ -19,17 +19,20 @@ public class AuthController : ControllerBase
     private readonly IPasswordHasher _passwordHasher;
     private readonly IJwtProvider _jwtProvider;
     private readonly IUnitOfWork _unitOfWork;
+    private readonly IConfiguration _configuration;
 
     public AuthController(
         IUserRepository userRepository,
         IPasswordHasher passwordHasher,
         IJwtProvider jwtProvider,
-        IUnitOfWork unitOfWork)
+        IUnitOfWork unitOfWork,
+        IConfiguration configuration)
     {
         _userRepository = userRepository;
         _passwordHasher = passwordHasher;
         _jwtProvider = jwtProvider;
         _unitOfWork = unitOfWork;
+        _configuration = configuration;
     }
     
     private static string HashToken(string token){
@@ -65,6 +68,11 @@ public class AuthController : ControllerBase
         var accessToken = _jwtProvider.GenerateAccessToken(user, roles);
         var refreshToken = _jwtProvider.GenerateRefreshToken();
 
+        var expiryMinutesStr = _configuration["Jwt:ExpiryMinutes"] ?? "60";
+        double.TryParse(expiryMinutesStr, out var expiryMinutes);
+        if(expiryMinutes <= 0) expiryMinutes = 60;
+        var expriesInSeconds = (int)(expiryMinutes * 60);
+
         user.RefreshToken = HashToken(refreshToken);
         user.RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(7); // Hạn Refresh Token là 7 ngày
         await _unitOfWork.SaveChangesAsync();
@@ -72,7 +80,17 @@ public class AuthController : ControllerBase
         return Ok(new
         {
             AccessToken = accessToken,
-            RefreshToken = refreshToken
+            RefreshToken = refreshToken,
+            TokenType = "Bearer",
+            ExpiresIn = expriesInSeconds,
+            User = new 
+            {
+                user.Id,
+                user.Username,
+                user.Email,
+                user.FullName,
+                Roles = roles
+            }
         });
     }
 
@@ -103,19 +121,39 @@ public class AuthController : ControllerBase
         }
 
         var userWithRoles = await _userRepository.GetByUsernameWithRolesAsync(user.Username);
-        var roles = userWithRoles?.UserRoles.Select(ur => ur.Role!.RoleName).ToList() ?? new List<string>();
+        if (userWithRoles == null) 
+        {
+            return Unauthorized("User not found.");
+        }
 
-        var newAccessToken = _jwtProvider.GenerateAccessToken(user, roles);
+        var roles = userWithRoles.UserRoles.Select(ur => ur.Role!.RoleName).ToList();
+
+        var newAccessToken = _jwtProvider.GenerateAccessToken(userWithRoles, roles);
         var newRefreshToken = _jwtProvider.GenerateRefreshToken();
 
         user.RefreshToken = HashToken(newRefreshToken);
         user.RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(7);
         await _unitOfWork.SaveChangesAsync();
 
+        var expiryMinutesStr = _configuration["Jwt:ExpiryMinutes"] ?? "60";
+        double.TryParse(expiryMinutesStr, out var expiryMinutes);
+        if(expiryMinutes <= 0) expiryMinutes = 60;
+        var expriesInSeconds = (int)(expiryMinutes * 60);
+
         return Ok(new
         {
             AccessToken = newAccessToken,
-            RefreshToken = newRefreshToken
+            RefreshToken = newRefreshToken,
+            TokenType = "Bearer",
+            ExpiresIn = expriesInSeconds,
+            User = new
+            {
+                userWithRoles.Id,
+                userWithRoles.Username,
+                userWithRoles.Email,
+                userWithRoles.FullName,
+                Roles = roles
+            }
         });
     }
 }
