@@ -6,13 +6,16 @@ using Microsoft.IdentityModel.Tokens;
 using System;
 using System.IdentityModel.Tokens.Jwt;
 using System.Linq;
+using System.Security.Claims;
 using System.Text;
+using System.Threading.Tasks;
+using UavPms.Core.Interfaces.Services;
 using UavPms.WebApi.Controllers;
 
 namespace UavPms.WebApi.Filters;
 
 [AttributeUsage(AttributeTargets.Class | AttributeTargets.Method)]
-public class RequireStepUpAttribute : Attribute, IAuthorizationFilter
+public class RequireStepUpAttribute : Attribute, IAsyncAuthorizationFilter
 {
     private readonly string _purpose;
 
@@ -21,7 +24,7 @@ public class RequireStepUpAttribute : Attribute, IAuthorizationFilter
         _purpose = purpose;
     }
 
-    public void OnAuthorization(AuthorizationFilterContext context)
+    public async Task OnAuthorizationAsync(AuthorizationFilterContext context)
     {
         var request = context.HttpContext.Request;
         
@@ -73,8 +76,24 @@ public class RequireStepUpAttribute : Attribute, IAuthorizationFilter
                 context.Result = new UnauthorizedObjectResult(new ApiResponse(false, "Invalid Step-Up token missing verified_at."));
                 return;
             }
+
+            var userIdString = principal.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrEmpty(userIdString))
+            {
+                context.Result = new UnauthorizedObjectResult(new ApiResponse(false, "Invalid Step-Up token missing user identifier."));
+                return;
+            }
+
+            // Verify with Redis key step-up:{userId}:{purpose}
+            var otpService = context.HttpContext.RequestServices.GetRequiredService<IOtpService>();
+            var savedToken = await otpService.GetStepUpTokenAsync(userIdString, _purpose);
+            if (savedToken == null || savedToken != tokenString)
+            {
+                context.Result = new ObjectResult(new ApiResponse(false, "Step-Up token has expired, been used, or is invalid.")) { StatusCode = 403 };
+                return;
+            }
             
-            // Optional: Store principal in HttpContext items if needed by the controller
+            // Store principal in HttpContext items if needed by the controller
             context.HttpContext.Items["StepUpPrincipal"] = principal;
         }
         catch (SecurityTokenExpiredException)

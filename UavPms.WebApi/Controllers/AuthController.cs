@@ -32,7 +32,6 @@ public class AuthController : ControllerBase
     private readonly IEventPublisher _eventPublisher;
     private readonly IMemoryCache _cache;
     private readonly IEnumerable<IOtpPurposeHandler> _otpHandlers;
-    private readonly IGenericRepository<PasswordResetToken> _passwordResetTokenRepository;
     private readonly IGenericRepository<TrustedDevice> _trustedDeviceRepository;
 
     public AuthController(
@@ -46,7 +45,6 @@ public class AuthController : ControllerBase
         IEventPublisher eventPublisher,
         IMemoryCache cache,
         IEnumerable<IOtpPurposeHandler> otpHandlers,
-        IGenericRepository<PasswordResetToken> passwordResetTokenRepository,
         IGenericRepository<TrustedDevice> trustedDeviceRepository)
     {
         _userRepository = userRepository;
@@ -59,7 +57,6 @@ public class AuthController : ControllerBase
         _eventPublisher = eventPublisher;
         _cache = cache;
         _otpHandlers = otpHandlers;
-        _passwordResetTokenRepository = passwordResetTokenRepository;
         _trustedDeviceRepository = trustedDeviceRepository;
     }
     
@@ -329,9 +326,15 @@ public class AuthController : ControllerBase
         }
 
         var user = await _userRepository.GetByEmailWithRolesAsync(email!);
-        if (user == null || user.Status != "Active")
+        if (user == null)
         {
-            return BadRequest(new ApiResponse(false, "User not found or inactive."));
+            return BadRequest(new ApiResponse(false, "User not found."));
+        }
+
+        // Bỏ qua check Active status cho EmailVerification
+        if (request.Purpose != OtpPurpose.EmailVerification && user.Status != "Active")
+        {
+            return BadRequest(new ApiResponse(false, "User account is inactive."));
         }
 
         switch (request.Purpose)
@@ -354,16 +357,8 @@ public class AuthController : ControllerBase
                 var verificationToken = Guid.NewGuid().ToString("N");
                 var hashedToken = HashToken(verificationToken);
 
-                var dbToken = new PasswordResetToken
-                {
-                    UserId = user.Id,
-                    Token = hashedToken,
-                    ExpiryDate = DateTime.UtcNow.AddMinutes(10), // 10 minutes short-lived
-                    Used = false
-                };
-
-                await _passwordResetTokenRepository.AddAsync(dbToken);
-                await _unitOfWork.SaveChangesAsync();
+                // Save verificationToken in Redis (10 minutes)
+                await _otpService.SaveVerificationTokenAsync(hashedToken, user.Email, TimeSpan.FromMinutes(10));
 
                 return Ok(new ApiResponse(true, "OTP verified successfully.", new
                 {
@@ -374,6 +369,9 @@ public class AuthController : ControllerBase
             case OtpPurpose.ChangeEmail:
             case OtpPurpose.DeleteAccount:
                 var stepUpToken = _jwtProvider.GenerateStepUpToken(user, request.Purpose.ToString());
+                // Save step-up token in Redis (5 minutes)
+                await _otpService.SaveStepUpTokenAsync(user.Id.ToString(), request.Purpose.ToString(), stepUpToken, TimeSpan.FromMinutes(5));
+                
                 return Ok(new ApiResponse(true, "OTP verified successfully for sensitive action.", new
                 {
                     StepUpToken = stepUpToken
@@ -381,6 +379,7 @@ public class AuthController : ControllerBase
 
             case OtpPurpose.EmailVerification:
                 user.IsEmailVerified = true;
+                user.Status = "Active"; // Kích hoạt trạng thái tài khoản sau khi email được verify
                 await _userRepository.UpdateAsync(user);
                 await _unitOfWork.SaveChangesAsync();
                 return Ok(new ApiResponse(true, "Email has been verified successfully."));
@@ -458,26 +457,27 @@ public class AuthController : ControllerBase
         }
 
         var hashedToken = HashToken(request.VerificationToken);
-        var tokens = await _passwordResetTokenRepository.FindAsync(t => t.Token == hashedToken && !t.Used && t.ExpiryDate > DateTime.UtcNow, track: true);
-        var dbToken = tokens.FirstOrDefault();
-
-        if (dbToken == null)
+        
+        // Retrieve email associated with token hash from Redis
+        var email = await _otpService.GetVerificationTokenEmailAsync(hashedToken);
+        if (string.IsNullOrEmpty(email))
         {
             return BadRequest(new ApiResponse(false, "Invalid or expired verification token."));
         }
 
-        var user = await _userRepository.GetByIdAsync(dbToken.UserId, track: true);
+        var user = await _userRepository.GetByEmailWithRolesAsync(email);
         if (user == null || user.Status != "Active")
         {
             return BadRequest(new ApiResponse(false, "User not found or inactive."));
         }
 
         user.PasswordHash = _passwordHasher.Hash(request.NewPassword);
-        dbToken.Used = true;
 
         await _userRepository.UpdateAsync(user);
-        await _passwordResetTokenRepository.UpdateAsync(dbToken);
         await _unitOfWork.SaveChangesAsync();
+
+        // Invalidate verificationToken on Redis immediately (single-use)
+        await _otpService.DeleteVerificationTokenAsync(hashedToken);
 
         await _eventPublisher.PublishAsync(new PasswordResetCompleted
         {

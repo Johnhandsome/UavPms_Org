@@ -56,7 +56,21 @@ public static class DependencyInjection
         // Đăng ký các Dịch vụ OTP, Email (SendGrid) và Event Publisher (RabbitMQ)
         services.AddMemoryCache();
         services.AddScoped<IEmailService, EmailService>();
-        services.AddScoped<IOtpService, OtpService>();
+
+        // Register Redis ConnectionMultiplexer as Singleton
+        var redisConnectionString = configuration["Redis:ConnectionString"];
+        var redisPassword = configuration["Redis:Password"];
+        if (!string.IsNullOrEmpty(redisConnectionString))
+        {
+            var configOptions = StackExchange.Redis.ConfigurationOptions.Parse(redisConnectionString);
+            if (!string.IsNullOrEmpty(redisPassword))
+            {
+                configOptions.Password = redisPassword;
+            }
+            services.AddSingleton<StackExchange.Redis.IConnectionMultiplexer>(StackExchange.Redis.ConnectionMultiplexer.Connect(configOptions));
+        }
+
+        services.AddScoped<IOtpService, RedisOtpService>();
         services.AddScoped<IEventPublisher, RabbitMqEventPublisher>();
 
         // Đăng ký OTP Purpose Handlers (Strategy pattern)
