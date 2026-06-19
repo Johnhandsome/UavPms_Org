@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Http;
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Security.Cryptography;
@@ -77,7 +79,7 @@ public class AuthController : ControllerBase
         return devices.FirstOrDefault();
     }
 
-    private async Task<IActionResult> IssueAuthenticationResponseAsync(User user)
+    private async Task<IActionResult> IssueAuthenticationResponseAsync(User user, string? deviceTrustToken = null)
     {
         var roles = user.UserRoles.Select(r => r.Role!.RoleName).ToList();
 
@@ -98,11 +100,24 @@ public class AuthController : ControllerBase
         await _refreshTokenRepository.AddAsync(refreshTokenEntity);
         await _unitOfWork.SaveChangesAsync();
 
+        if (!string.IsNullOrEmpty(deviceTrustToken))
+        {
+            var cookieOptions = new CookieOptions
+            {
+                HttpOnly = true,
+                Secure = true,
+                SameSite = SameSiteMode.Strict,
+                Expires = DateTime.UtcNow.AddDays(30)
+            };
+            Response.Cookies.Append("device_trust_token", deviceTrustToken, cookieOptions);
+        }
+
         return Ok(new ApiResponse(true, "Success", new
         {
             AccessToken = accessToken,
             RefreshToken = refreshToken,
             ExpiresIn = expiryMinutes * 60,
+            DeviceTrustToken = deviceTrustToken,
             User = new
             {
                 user.Id,
@@ -139,7 +154,8 @@ public class AuthController : ControllerBase
             await _trustedDeviceRepository.UpdateAsync(trustedDevice);
             await _unitOfWork.SaveChangesAsync();
 
-            return await IssueAuthenticationResponseAsync(user);
+            var deviceTrustToken = Request.Cookies["device_trust_token"] ?? Request.Headers["X-Device-Trust-Token"].ToString();
+            return await IssueAuthenticationResponseAsync(user, deviceTrustToken);
         }
 
         var otp = await _otpService.GenerateAndSendOtpAsync(user.Email, OtpPurpose.Login);
@@ -148,6 +164,196 @@ public class AuthController : ControllerBase
             return BadRequest(new ApiResponse(false, otp.Message));
 
         return Ok(new ApiResponse(true, "OTP required", new { user.Email }));
+    }
+
+    [HttpPost("otp/send")]
+    public async Task<IActionResult> SendOtp([FromBody] SendOtpRequest request)
+    {
+        if (request == null)
+        {
+            return BadRequest(new ApiResponse(false, "Request body is required."));
+        }
+
+        var handler = _otpHandlers.FirstOrDefault(h => h.Purpose == request.Purpose);
+        if (handler == null)
+        {
+            return BadRequest(new ApiResponse(false, "Unsupported OTP purpose."));
+        }
+
+        string? email = request.Email;
+
+        if (handler.RequiresAuthentication)
+        {
+            if (User.Identity?.IsAuthenticated != true)
+            {
+                return Unauthorized(new ApiResponse(false, "Authentication is required for this OTP purpose."));
+            }
+
+            var userIdString = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrEmpty(userIdString) || !Guid.TryParse(userIdString, out var userId))
+            {
+                return Unauthorized(new ApiResponse(false, "Invalid user token claims."));
+            }
+
+            var user = await _userRepository.GetByIdAsync(userId, track: false);
+            if (user == null || user.Status != "Active")
+            {
+                return BadRequest(new ApiResponse(false, "User not found or inactive."));
+            }
+
+            email = user.Email;
+        }
+
+        var validationResult = await handler.ValidatePreconditionAsync(email, User);
+        if (!validationResult.IsValid)
+        {
+            return BadRequest(new ApiResponse(false, validationResult.Message));
+        }
+
+        if (validationResult.ShouldSilentSuccess)
+        {
+            return Ok(new ApiResponse(true, "If the email is associated with an account, an OTP code has been sent."));
+        }
+
+        var result = await _otpService.GenerateAndSendOtpAsync(email!, request.Purpose);
+        if (!result.Success)
+        {
+            return BadRequest(new ApiResponse(false, result.Message));
+        }
+
+        if (request.Purpose == OtpPurpose.ForgotPassword)
+        {
+            await _eventPublisher.PublishAsync(new PasswordResetRequested
+            {
+                Email = email!,
+                Token = "",
+                ExpiryTime = DateTime.UtcNow.AddMinutes(3)
+            });
+
+            return Ok(new ApiResponse(true, "If the email is associated with an account, an OTP code has been sent."));
+        }
+
+        return Ok(new ApiResponse(true, result.Message));
+    }
+
+    [HttpPost("otp/verify")]
+    public async Task<IActionResult> VerifyOtp([FromBody] VerifyOtpRequest request)
+    {
+        if (request == null || string.IsNullOrEmpty(request.Otp))
+        {
+            return BadRequest(new ApiResponse(false, "OTP is required."));
+        }
+
+        var handler = _otpHandlers.FirstOrDefault(h => h.Purpose == request.Purpose);
+        if (handler == null)
+        {
+            return BadRequest(new ApiResponse(false, "Unsupported OTP purpose."));
+        }
+
+        string? email = request.Email;
+
+        if (handler.RequiresAuthentication)
+        {
+            if (User.Identity?.IsAuthenticated != true)
+            {
+                return Unauthorized(new ApiResponse(false, "Authentication is required for this OTP purpose."));
+            }
+
+            var userIdString = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrEmpty(userIdString) || !Guid.TryParse(userIdString, out var userId))
+            {
+                return Unauthorized(new ApiResponse(false, "Invalid user token claims."));
+            }
+
+            var userFromDb = await _userRepository.GetByIdAsync(userId, track: false);
+            if (userFromDb == null || userFromDb.Status != "Active")
+            {
+                return BadRequest(new ApiResponse(false, "User not found or inactive."));
+            }
+
+            email = userFromDb.Email;
+        }
+        else
+        {
+            if (string.IsNullOrEmpty(email))
+            {
+                return BadRequest(new ApiResponse(false, "Email is required."));
+            }
+        }
+
+        var validationResult = await handler.ValidatePreconditionAsync(email, User);
+        if (!validationResult.IsValid)
+        {
+            return BadRequest(new ApiResponse(false, validationResult.Message));
+        }
+
+        var otpVerification = await _otpService.VerifyOtpAsync(email!, request.Otp, request.Purpose);
+        if (!otpVerification.IsValid)
+        {
+            return BadRequest(new ApiResponse(false, otpVerification.Message));
+        }
+
+        var user = await _userRepository.GetByEmailWithRolesAsync(email!);
+        if (user == null)
+        {
+            return BadRequest(new ApiResponse(false, "User not found."));
+        }
+
+        if (request.Purpose != OtpPurpose.EmailVerification && user.Status != "Active")
+        {
+            return BadRequest(new ApiResponse(false, "User account is inactive."));
+        }
+
+        switch (request.Purpose)
+        {
+            case OtpPurpose.Login:
+                var newDeviceTrustToken = Guid.NewGuid().ToString("N");
+                var tokenHash = HashToken(newDeviceTrustToken);
+                var trustedDevice = new TrustedDevice
+                {
+                    UserId = user.Id,
+                    DeviceTokenHash = tokenHash,
+                    ExpiresAt = DateTime.UtcNow.AddDays(30),
+                    LastUsedAt = DateTime.UtcNow,
+                    UserAgent = Request.Headers["User-Agent"].ToString()
+                };
+                await _trustedDeviceRepository.AddAsync(trustedDevice);
+                return await IssueAuthenticationResponseAsync(user, newDeviceTrustToken);
+
+            case OtpPurpose.ForgotPassword:
+                var verificationToken = Guid.NewGuid().ToString("N");
+                var hashedToken = HashToken(verificationToken);
+
+                // Save verificationToken in Redis (10 minutes)
+                await _otpService.SaveVerificationTokenAsync(hashedToken, user.Email, TimeSpan.FromMinutes(10));
+
+                return Ok(new ApiResponse(true, "OTP verified successfully.", new
+                {
+                    VerificationToken = verificationToken
+                }));
+
+            case OtpPurpose.ChangePassword:
+            case OtpPurpose.ChangeEmail:
+            case OtpPurpose.DeleteAccount:
+                var stepUpToken = _jwtProvider.GenerateStepUpToken(user, request.Purpose.ToString());
+                // Save step-up token in Redis (5 minutes)
+                await _otpService.SaveStepUpTokenAsync(user.Id.ToString(), request.Purpose.ToString(), stepUpToken, TimeSpan.FromMinutes(5));
+                
+                return Ok(new ApiResponse(true, "OTP verified successfully for sensitive action.", new
+                {
+                    StepUpToken = stepUpToken
+                }));
+
+            case OtpPurpose.EmailVerification:
+                user.IsEmailVerified = true;
+                user.Status = "Active";
+                await _userRepository.UpdateAsync(user);
+                await _unitOfWork.SaveChangesAsync();
+                return Ok(new ApiResponse(true, "Email has been verified successfully."));
+
+            default:
+                return BadRequest(new ApiResponse(false, "Unsupported OTP purpose."));
+        }
     }
 
     [HttpPost("refresh-token")]
@@ -219,5 +425,7 @@ public class AuthController : ControllerBase
 
     public record LoginRequest(string Email, string Password);
     public record RefreshTokenRequest(string RefreshToken);
+    public record SendOtpRequest(string? Email, OtpPurpose Purpose);
+    public record VerifyOtpRequest(string? Email, string Otp, OtpPurpose Purpose);
     public record ResetPasswordRequest(string VerificationToken, string NewPassword);
 }

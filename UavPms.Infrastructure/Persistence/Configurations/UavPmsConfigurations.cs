@@ -453,20 +453,6 @@ public class AuditLogConfiguration : IEntityTypeConfiguration<AuditLog>
     }
 }
 
-public class PasswordResetTokenConfiguration : IEntityTypeConfiguration<PasswordResetToken>
-{
-    public void Configure(EntityTypeBuilder<PasswordResetToken> builder)
-    {
-        builder.ToTable("PasswordResetTokens");
-        builder.HasKey(e => e.Id);
-
-        builder.HasOne(e => e.User)
-            .WithMany()
-            .HasForeignKey(e => e.UserId)
-            .OnDelete(DeleteBehavior.Cascade);
-    }
-}
-
 public class TrustedDeviceConfiguration : IEntityTypeConfiguration<TrustedDevice>
 {
     public void Configure(EntityTypeBuilder<TrustedDevice> builder)

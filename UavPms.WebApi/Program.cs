@@ -117,18 +117,6 @@ if (app.Environment.IsDevelopment())
 
     using var scope = app.Services.CreateScope();
     var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-    
-    try
-    {
-        dbContext.Database.ExecuteSqlRaw(@"
-            ALTER TABLE ""Users"" ADD COLUMN IF NOT EXISTS ""RefreshToken"" text NULL;
-            ALTER TABLE ""Users"" ADD COLUMN IF NOT EXISTS ""RefreshTokenExpiryTime"" timestamp with time zone NULL;
-        ");
-    }
-    catch (Exception ex)
-    {
-        Console.WriteLine($"DB HEAL ERROR: {ex}");
-    }
 
     dbContext.Database.Migrate();
     await DatabaseSeeder.SeedAsync(dbContext);
