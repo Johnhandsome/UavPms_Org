@@ -1,10 +1,5 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
 using MediatR;
 using Microsoft.Extensions.Configuration;
 using UavPms.Application.Features.Auth.DTOs;
@@ -12,17 +7,18 @@ using UavPms.Core.Entities;
 using UavPms.Core.Enums;
 using UavPms.Core.Interfaces.Repositories;
 using UavPms.Core.Interfaces.Services;
+using RefreshTokenEntity = UavPms.Core.Entities.RefreshToken;
 
 namespace UavPms.Application.Features.Auth.Commands.Login;
 
-public class LoginCommandHandler : IRequestHandler<LogginCommand, AuthResultDto>
+public class LoginCommandHandler : IRequestHandler<LoginCommand, AuthResultDto>
 {
     private readonly IUserRepository _userRepository;
     private readonly IPasswordHasher _passwordHasher;
     private readonly IJwtProvider _jwtProvider;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IConfiguration _configuration;
-    private readonly IGenericRepository<RefreshToken> _refreshTokenRepository;
+    private readonly IGenericRepository<RefreshTokenEntity> _refreshTokenRepository;
     private readonly IOtpService _otpService;
     private readonly IGenericRepository<TrustedDevice>  _trustedDeviceRepository;
 
@@ -30,7 +26,7 @@ public class LoginCommandHandler : IRequestHandler<LogginCommand, AuthResultDto>
         IUserRepository userRepository,
         IPasswordHasher passwordHasher,
         IJwtProvider jwtProvider,
-        IGenericRepository<RefreshToken> refreshTokenRepository,
+        IGenericRepository<RefreshTokenEntity> refreshTokenRepository,
         IOtpService otpService,
         IGenericRepository<TrustedDevice> trustedDeviceRepository,
         IConfiguration configuration,
@@ -46,7 +42,7 @@ public class LoginCommandHandler : IRequestHandler<LogginCommand, AuthResultDto>
         _unitOfWork = unitOfWork;
     }
     
-    public async Task<AuthResultDto> Handle(LogginCommand request, CancellationToken cancellationToken)
+    public async Task<AuthResultDto> Handle(LoginCommand request, CancellationToken cancellationToken)
     {
         var user = await _userRepository.GetByEmailWithRolesAsync(request.Email) ?? await _userRepository.GetByUsernameWithRolesAsync(request.Email);
 
@@ -111,7 +107,7 @@ public class LoginCommandHandler : IRequestHandler<LogginCommand, AuthResultDto>
         var refreshToken = _jwtProvider.GenerateRefreshToken();
         var expiryMinutes = int.TryParse(_configuration["Jwt:ExpiryMinutes"], out var m) ? m : 60;
 
-        var refreshTokenEntity = new RefreshToken
+        var refreshTokenEntity = new RefreshTokenEntity
         {
             UserId = user.Id,
             TokenHash = HashToken(refreshToken),

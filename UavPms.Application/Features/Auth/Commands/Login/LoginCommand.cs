@@ -3,7 +3,7 @@ using UavPms.Application.Features.Auth.DTOs;
 
 namespace UavPms.Application.Features.Auth.Commands.Login;
 
-public record LogginCommand(
+public record LoginCommand(
     string Email,
     string Password,
     string? DeviceTrustToken,
