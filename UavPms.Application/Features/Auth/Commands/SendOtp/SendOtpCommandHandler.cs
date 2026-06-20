@@ -37,7 +37,7 @@ public class SendOtpCommandHandler : IRequestHandler<SendOtpCommand>
             throw new BusinessRuleException(precondition.Message);
         }
         
-        var result = await _otpService.GenerateAndSendOtpAsync(request.Email, request.OtpPurpose, request.isResend);
+        var result = await _otpService.GenerateAndSendOtpAsync(request.Email, request.OtpPurpose, request.IsResend);
         if (!result.Success)
         {
             throw new BusinessRuleException(result.Message);

@@ -53,7 +53,7 @@ public class VerifyOtpCommandHandler : IRequestHandler<VerifyOtpCommand, OtpVeri
         {
             var user = await _userRepository.GetByEmailWithRolesAsync(request.Email)
                        ?? await _userRepository.GetByUsernameWithRolesAsync(request.Email);
-            if (user == null || user.Status == "Active")
+            if (user == null || user.Status != "Active")
             {
                 throw new NotFoundException("Active user", request.Email);
             }
@@ -91,6 +91,7 @@ public class VerifyOtpCommandHandler : IRequestHandler<VerifyOtpCommand, OtpVeri
             var token = Guid.NewGuid().ToString();
             var hash = HashToken(token);
             await _otpService.SaveVerificationTokenAsync(hash, request.Email, TimeSpan.FromMinutes(10));
+            resultDto.Token = token;
         }
         else if (request.OtpPurpose == OtpPurpose.ChangePassword ||
                  request.OtpPurpose == OtpPurpose.ChangeEmail ||
@@ -99,7 +100,7 @@ public class VerifyOtpCommandHandler : IRequestHandler<VerifyOtpCommand, OtpVeri
             var user = await _userRepository.GetByEmailWithRolesAsync(request.Email)
                 ?? await _userRepository.GetByUsernameWithRolesAsync(request.Email);
 
-            if (user == null || user.Status == "Active")
+            if (user == null || user.Status != "Active")
             {
                 throw new NotFoundException("User not found", request.Email);
             }

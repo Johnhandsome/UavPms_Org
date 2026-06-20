@@ -2,6 +2,7 @@ using FluentValidation;
 using Microsoft.AspNetCore.Diagnostics;
 using System.Net;
 using UavPms.WebApi.Controllers;
+using UavPms.Application.Common.Exceptions;
 
 namespace UavPms.WebApi.Middlewares;
 
@@ -36,6 +37,36 @@ public class GlobalExceptionHandler : IExceptionHandler
                 Message: "One or more validation errors occurred.",
                 Data: null,
                 Errors: errors
+            );
+        }
+        else if (exception is UnauthorizedAccessException unauthorizedAccessException)
+        {
+            httpContext.Response.StatusCode = (int)HttpStatusCode.Unauthorized;
+            apiResponse = new ApiResponse(
+                Success: false,
+                Message: unauthorizedAccessException.Message,
+                Data: null,
+                Errors: null
+            );
+        }
+        else if (exception is NotFoundException notFoundException)
+        {
+            httpContext.Response.StatusCode = (int)HttpStatusCode.NotFound;
+            apiResponse = new ApiResponse(
+                Success: false,
+                Message: notFoundException.Message,
+                Data: null,
+                Errors: null
+            );
+        }
+        else if (exception is BusinessRuleException businessRuleException)
+        {
+            httpContext.Response.StatusCode = (int)HttpStatusCode.BadRequest;
+            apiResponse = new ApiResponse(
+                Success: false,
+                Message: businessRuleException.Message,
+                Data: null,
+                Errors: null
             );
         }
         else
