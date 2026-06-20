@@ -53,13 +53,25 @@ public class VerifyOtpCommandHandler : IRequestHandler<VerifyOtpCommand, OtpVeri
             Message = "Verification Successful",
         };
 
-        if (request.OtpPurpose == OtpPurpose.Login)
+        if (request.OtpPurpose == OtpPurpose.Login || request.OtpPurpose == OtpPurpose.EmailVerification)
         {
             var user = await _userRepository.GetByEmailWithRolesAsync(request.Email)
                        ?? await _userRepository.GetByUsernameWithRolesAsync(request.Email);
-            if (user == null || user.Status != "Active")
+            if (user == null)
             {
-                throw new NotFoundException("Active user", request.Email);
+                throw new NotFoundException("User not found", request.Email);
+            }
+
+            if (request.OtpPurpose == OtpPurpose.Login && user.Status != "Active")
+            {
+                throw new BusinessRuleException("User account is not active.");
+            }
+
+            if (request.OtpPurpose == OtpPurpose.EmailVerification)
+            {
+                user.IsEmailVerified = true;
+                user.Status = "Active";
+                await _userRepository.UpdateAsync(user);
             }
 
             var roles = user.UserRoles.Select(r => r.Role!.RoleName).ToList();
@@ -127,20 +139,6 @@ public class VerifyOtpCommandHandler : IRequestHandler<VerifyOtpCommand, OtpVeri
                 request.OtpPurpose.ToString(), token, TimeSpan.FromMinutes(5));
             
             resultDto.Token = token;
-        }
-        else if (request.OtpPurpose == OtpPurpose.EmailVerification)
-        {
-            var user = await _userRepository.GetByEmailWithRolesAsync(request.Email)
-                       ?? await _userRepository.GetByUsernameWithRolesAsync(request.Email);
-            if (user == null)
-            {
-                throw new NotFoundException("User not found", request.Email);
-            }
-
-            user.IsEmailVerified = true;
-            user.Status = "Active";
-            await _userRepository.UpdateAsync(user);
-            await _unitOfWork.SaveChangesAsync();
         }
         return resultDto;
     }
