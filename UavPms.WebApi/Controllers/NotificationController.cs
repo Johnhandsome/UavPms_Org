@@ -1,9 +1,14 @@
 using Microsoft.AspNetCore.Mvc;
 using System;
 using System.Threading.Tasks;
-using UavPms.Core.Entities;
-using UavPms.Core.Interfaces.Repositories;
 using Asp.Versioning;
+using MediatR;
+using UavPms.Core.Contracts;
+using UavPms.Application.Features.Notifications.Queries.GetNotifications;
+using UavPms.Application.Features.Notifications.Queries.GetNotificationById;
+using UavPms.Application.Features.Notifications.Commands.Create;
+using UavPms.Application.Features.Notifications.Commands.MarkAsRead;
+using UavPms.Application.Features.Notifications.Commands.Delete;
 
 namespace UavPms.WebApi.Controllers;
 
@@ -12,66 +17,77 @@ namespace UavPms.WebApi.Controllers;
 [ApiVersion("1.0")]
 public class NotificationController : ControllerBase
 {
-    private readonly INotificationRepository _notificationRepository;
+    private readonly ISender _mediator;
 
-    public NotificationController(INotificationRepository notificationRepository)
+    public NotificationController(ISender mediator)
     {
-        _notificationRepository = notificationRepository;
+        _mediator = mediator;
     }
 
-    /// <summary>
-    /// Lấy lịch sử thông báo của một người dùng.
-    /// GET: api/notifications/history?userId=xxx
-    /// </summary>
     [HttpGet("history")]
     public async Task<IActionResult> GetHistory([FromQuery] string userId)
     {
         if (string.IsNullOrEmpty(userId))
         {
-            return BadRequest("UserId is required.");
+            return BadRequest(new ApiResponse(false, "UserId is required."));
         }
 
         if (!Guid.TryParse(userId, out var userGuid))
         {
-            return BadRequest("Invalid UserId format.");
+            return BadRequest(new ApiResponse(false, "Invalid UserId format."));
         }
 
-        var notifications = await _notificationRepository.GetByUserAsync(userGuid);
-        return Ok(notifications);
+        var query = new GetNotificationsQuery(userGuid);
+        var result = await _mediator.Send(query);
+        return Ok(result);
     }
 
-    /// <summary>
-    /// Đánh dấu thông báo là đã đọc.
-    /// PUT: api/notifications/{id}/read
-    /// </summary>
+    [HttpGet("{id:guid}")]
+    public async Task<IActionResult> GetById(Guid id)
+    {
+        var query = new GetNotificationByIdQuery(id);
+        var result = await _mediator.Send(query);
+        return Ok(result);
+    }
+
     [HttpPut("{id:guid}/read")]
     public async Task<IActionResult> MarkAsRead(Guid id)
     {
-        await _notificationRepository.MarkAsReadAsync(id);
-        return Ok(new { Message = "Notification marked as read successfully." });
+        var command = new MarkNotificationAsReadCommand(id);
+        await _mediator.Send(command);
+        return Ok(new ApiResponse(true, "Notification marked as read successfully."));
     }
 
-    /// <summary>
-    /// Tạo thông báo mới (dùng cho HTTP/testing).
-    /// POST: api/notifications
-    /// </summary>
     [HttpPost]
-    public async Task<IActionResult> CreateNotification([FromBody] Notification notification)
+    public async Task<IActionResult> CreateNotification([FromBody] CreateNotificationRequest request)
     {
-        if (notification == null)
-        {
-            return BadRequest("Notification data is null.");
-        }
-
-        if (notification.Id == Guid.Empty)
-        {
-            notification.Id = Guid.NewGuid();
-        }
+        var command = new CreateNotificationCommand(
+            request.UserId, 
+            request.Type, 
+            request.ReferenceType, 
+            request.ReferenceId, 
+            request.Title, 
+            request.Body
+        );
         
-        notification.SentAt = DateTime.UtcNow;
-        notification.IsRead = false;
-
-        await _notificationRepository.AddAsync(notification);
-        return CreatedAtAction(nameof(GetHistory), new { userId = notification.UserId.ToString() }, notification);
+        var result = await _mediator.Send(command);
+        return CreatedAtAction(nameof(GetHistory), new { userId = result.UserId.ToString() }, result);
     }
+
+    [HttpDelete("{id:guid}")]
+    public async Task<IActionResult> DeleteNotification(Guid id)
+    {
+        var command = new DeleteNotificationCommand(id);
+        await _mediator.Send(command);
+        return Ok(new ApiResponse(true, "Notification deleted successfully."));
+    }
+
+    public record CreateNotificationRequest(
+        Guid UserId,
+        string Type,
+        string ReferenceType,
+        Guid? ReferenceId,
+        string Title,
+        string Body
+    );
 }

@@ -5,7 +5,7 @@ using UavPms.Core.Interfaces.Repositories;
 
 namespace UavPms.Application.Features.Notifications.Queries.GetNotificationById;
 
-public class GetNotificationByIdQueryHandler : IRequestHandler<GetNofiticationByIdQuery, NotificationDto>
+public class GetNotificationByIdQueryHandler : IRequestHandler<GetNotificationByIdQuery, NotificationDto>
 {
     private readonly INotificationRepository _notificationRepository;
 
@@ -14,7 +14,7 @@ public class GetNotificationByIdQueryHandler : IRequestHandler<GetNofiticationBy
         _notificationRepository = notificationRepository;
     }
 
-    public async Task<NotificationDto> Handle(GetNofiticationByIdQuery request, CancellationToken cancellationToken)
+    public async Task<NotificationDto> Handle(GetNotificationByIdQuery request, CancellationToken cancellationToken)
     {
         var n = await _notificationRepository.GetByIdAsync(request.Id);
         if (n == null)

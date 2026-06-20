@@ -3,9 +3,8 @@ using UavPms.Core.Enums;
 
 namespace UavPms.Application.Features.Auth.Commands.SendOtp;
 
-public record SendOtpCommand
-(
+public record SendOtpCommand (
     string Email,
     OtpPurpose OtpPurpose,
-    bool isResend = false
+    bool IsResend = false
 ) : IRequest;
