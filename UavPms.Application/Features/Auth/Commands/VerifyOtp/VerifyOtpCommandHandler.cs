@@ -8,6 +8,7 @@ using UavPms.Core.Enums;
 using UavPms.Core.Interfaces.Repositories;
 using UavPms.Core.Interfaces.Services;
 using RefreshTokenEntity = UavPms.Core.Entities.RefreshToken;
+using UavPms.Core.Entities;
 
 namespace UavPms.Application.Features.Auth.Commands.VerifyOtp;
 
@@ -19,13 +20,15 @@ public class VerifyOtpCommandHandler : IRequestHandler<VerifyOtpCommand, OtpVeri
     private readonly IUnitOfWork _unitOfWork;
     private readonly IConfiguration _configuration;
     private readonly IGenericRepository<RefreshTokenEntity> _refreshTokenRepository;
+    private readonly IGenericRepository<TrustedDevice> _trustedDeviceRepository;
     public VerifyOtpCommandHandler(
         IOtpService otpService,
         IUserRepository userRepository,
         IJwtProvider jwtProvider,
         IUnitOfWork unitOfWork,
         IConfiguration configuration,
-        IGenericRepository<RefreshTokenEntity> refreshTokenRepository)
+        IGenericRepository<RefreshTokenEntity> refreshTokenRepository,
+        IGenericRepository<TrustedDevice> trustedDeviceRepository)
     {
         _otpService = otpService;
         _userRepository = userRepository;
@@ -33,6 +36,7 @@ public class VerifyOtpCommandHandler : IRequestHandler<VerifyOtpCommand, OtpVeri
         _unitOfWork = unitOfWork;
         _configuration = configuration;
         _refreshTokenRepository = refreshTokenRepository;
+        _trustedDeviceRepository = trustedDeviceRepository;
     }
 
     public async Task<OtpVerifyResultDto> Handle(VerifyOtpCommand request, CancellationToken cancellationToken)
@@ -71,6 +75,18 @@ public class VerifyOtpCommandHandler : IRequestHandler<VerifyOtpCommand, OtpVeri
                 DeviceInfo = request.UserAgent ?? string.Empty,
                 CreatedAt = DateTime.UtcNow,
             });
+
+            var deviceTrustToken = Guid.NewGuid().ToString("N");
+            var tokenHash = HashToken(deviceTrustToken);
+            await _trustedDeviceRepository.AddAsync(new TrustedDevice
+            {
+                UserId = user.Id,
+                DeviceTokenHash = tokenHash,
+                ExpiresAt = DateTime.UtcNow.AddDays(30),
+                LastUsedAt = DateTime.UtcNow,
+                UserAgent = request.UserAgent ?? string.Empty
+            });
+
             await _unitOfWork.SaveChangesAsync();
 
             resultDto.AuthResult = AuthResultDto.SuccessResult(
@@ -84,7 +100,8 @@ public class VerifyOtpCommandHandler : IRequestHandler<VerifyOtpCommand, OtpVeri
                     Username = user.Username,
                     FullName = user.FullName,
                     Roles = roles,
-                });
+                },
+                deviceTrustToken);
         }
         else if (request.OtpPurpose == OtpPurpose.ForgotPassword)
         {

@@ -22,6 +22,23 @@ public class AuthController : ControllerBase
         _mediator = mediator;
     }
     
+    private void AppendDeviceTrustCookie(string? deviceTrustToken)
+    {
+        if (string.IsNullOrEmpty(deviceTrustToken)) return;
+
+        var env = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
+        var isDev = string.IsNullOrEmpty(env) || env.Equals("Development", StringComparison.OrdinalIgnoreCase);
+
+        var cookieOptions = new CookieOptions
+        {
+            HttpOnly = true,
+            Secure = !isDev,
+            SameSite = isDev ? SameSiteMode.Lax : SameSiteMode.None,
+            Expires = DateTime.UtcNow.AddDays(30)
+        };
+        Response.Cookies.Append("device_trust_token", deviceTrustToken, cookieOptions);
+    }
+    
     [HttpPost("login")]
     public async Task<IActionResult> Login([FromBody] LoginRequest request)
     {
@@ -36,11 +53,14 @@ public class AuthController : ControllerBase
             return Ok(new ApiResponse(true, "OTP required", new { result.Email }));
         }
 
+        AppendDeviceTrustCookie(result.DeviceTrustToken);
+
         return Ok(new ApiResponse(true, "Sucess", new
         {
             result.AccessToken,
             result.RefreshToken,
             result.ExpiresIn,
+            result.DeviceTrustToken,
             result.User
         }));
     }
@@ -48,7 +68,7 @@ public class AuthController : ControllerBase
     [HttpPost("otp/send")]
     public async Task<IActionResult> SendOtp([FromBody] SendOtpRequest request)
     {
-        var command = new SendOtpCommand(request.Email, request.Purpose, request.IsResend);
+        var command = new SendOtpCommand(request.Email, request.Purpose, true);
         await _mediator.Send(command);
         return Ok(new ApiResponse(true, "OTP sent successfully."));
     }
@@ -57,8 +77,13 @@ public class AuthController : ControllerBase
     public async Task<IActionResult> VerifyOtp([FromBody] VerifyOtpRequest request)
     {
         var userAgent = Request.Headers["User-Agent"].ToString();
-        var command = new VerifyOtpCommand(request.Email, request.Code, request.Purpose, userAgent);
+        var command = new VerifyOtpCommand(request.Email, request.Otp, request.Purpose, userAgent);
         var result  = await _mediator.Send(command);
+        
+        if (result.Success && result.AuthResult != null)
+        {
+            AppendDeviceTrustCookie(result.AuthResult.DeviceTrustToken);
+        }
         
         return Ok(new ApiResponse(true, "Verification success.", result));
     }
@@ -87,7 +112,7 @@ public class AuthController : ControllerBase
 
     public record LoginRequest(string Email, string Password);
     public record RefreshTokenRequest(string RefreshToken);
-    public record SendOtpRequest(string Email, OtpPurpose Purpose, bool IsResend = false);
-    public record VerifyOtpRequest(string Email, string Code, OtpPurpose Purpose);
+    public record SendOtpRequest(string Email, OtpPurpose Purpose);
+    public record VerifyOtpRequest(string Email, string Otp, OtpPurpose Purpose);
     public record ResetPasswordRequest(string VerificationToken, string NewPassword);
 }

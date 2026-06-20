@@ -67,8 +67,8 @@ public class LoginCommandHandler : IRequestHandler<LoginCommand, AuthResultDto>
         {
             trustedDevice.LastUsedAt = DateTime.UtcNow;
             trustedDevice.ExpiresAt = DateTime.UtcNow.AddDays(30);
-            await _trustedDeviceRepository.AddAsync(trustedDevice);
-            return await IssueAuthenticationResponseAsync(user, request.UserAgent);
+            await _trustedDeviceRepository.UpdateAsync(trustedDevice);
+            return await IssueAuthenticationResponseAsync(user, request.UserAgent, request.DeviceTrustToken);
         }
 
         var otp = await _otpService.GenerateAndSendOtpAsync(user.Email, OtpPurpose.Login);
@@ -100,7 +100,7 @@ public class LoginCommandHandler : IRequestHandler<LoginCommand, AuthResultDto>
         return devices.FirstOrDefault();
     }
 
-    private async Task<AuthResultDto> IssueAuthenticationResponseAsync(User user, string? userAgent)
+    private async Task<AuthResultDto> IssueAuthenticationResponseAsync(User user, string? userAgent, string? deviceTrustToken = null)
     {
         var roles = user.UserRoles.Select(r => r.Role!.RoleName).ToList();
         var accessToken = _jwtProvider.GenerateAccessToken(user, roles);
@@ -128,6 +128,6 @@ public class LoginCommandHandler : IRequestHandler<LoginCommand, AuthResultDto>
             Roles = roles,
         };
         
-        return AuthResultDto.SuccessResult(accessToken, refreshToken, expiryMinutes * 60, userDto);
+        return AuthResultDto.SuccessResult(accessToken, refreshToken, expiryMinutes * 60, userDto, deviceTrustToken);
     }
 }
