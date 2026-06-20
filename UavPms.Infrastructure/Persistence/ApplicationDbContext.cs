@@ -9,6 +9,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<User> Users => Set<User>();
     public DbSet<Role> Roles => Set<Role>();
     public DbSet<UserRole> UserRoles => Set<UserRole>();
+    public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
     public DbSet<Region> Regions => Set<Region>();
     public DbSet<Substation> Substations => Set<Substation>();
     public DbSet<TransmissionLine> TransmissionLines => Set<TransmissionLine>();
@@ -30,6 +31,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<MaterialLog> MaterialLogs => Set<MaterialLog>();
     public DbSet<Notification> Notifications => Set<Notification>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
+    public DbSet<TrustedDevice> TrustedDevices => Set<TrustedDevice>();
 
     public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options) : base(options) {}
 

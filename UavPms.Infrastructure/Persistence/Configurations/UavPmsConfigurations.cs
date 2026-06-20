@@ -44,6 +44,23 @@ public class UserRoleConfiguration : IEntityTypeConfiguration<UserRole>
     }
 }
 
+public class RefreshTokenConfiguration : IEntityTypeConfiguration<RefreshToken>
+{
+    public void Configure(EntityTypeBuilder<RefreshToken> builder)
+    {
+        builder.ToTable("RefreshTokens");
+        builder.HasKey(e => e.Id);
+
+        builder.Property(e => e.TokenHash)
+            .IsRequired();
+
+        builder.HasOne(e => e.User)
+            .WithMany(u => u.RefreshTokens)
+            .HasForeignKey(e => e.UserId)
+            .OnDelete(DeleteBehavior.Cascade);
+    }
+}
+
 public class RegionConfiguration : IEntityTypeConfiguration<Region>
 {
     public void Configure(EntityTypeBuilder<Region> builder)
@@ -435,3 +452,19 @@ public class AuditLogConfiguration : IEntityTypeConfiguration<AuditLog>
             .OnDelete(DeleteBehavior.Restrict);
     }
 }
+
+public class TrustedDeviceConfiguration : IEntityTypeConfiguration<TrustedDevice>
+{
+    public void Configure(EntityTypeBuilder<TrustedDevice> builder)
+    {
+        builder.ToTable("TrustedDevices");
+        builder.HasKey(e => e.Id);
+
+        builder.HasOne(e => e.User)
+            .WithMany()
+            .HasForeignKey(e => e.UserId)
+            .OnDelete(DeleteBehavior.Cascade);
+    }
+}
+
+

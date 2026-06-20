@@ -1,7 +1,13 @@
 using FluentValidation;
 using Microsoft.AspNetCore.Diagnostics;
-using Microsoft.AspNetCore.Mvc;
+using System;
+using System.Linq;
 using System.Net;
+using System.Threading;
+using System.Threading.Tasks;
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Logging;
+using UavPms.WebApi.Controllers;
 
 namespace UavPms.WebApi.Middlewares;
 
@@ -18,7 +24,7 @@ public class GlobalExceptionHandler : IExceptionHandler
     {
         _logger.LogError(exception, "An unhandled exception occurred: {Message}", exception.Message);
 
-        ProblemDetails problemDetails;
+        ApiResponse apiResponse;
 
         if (exception is ValidationException validationException)
         {
@@ -31,29 +37,26 @@ public class GlobalExceptionHandler : IExceptionHandler
                     g => g.Select( e => e.ErrorMessage).ToArray()
                 );
 
-            problemDetails = new ValidationProblemDetails(errors)
-            {
-                Status = (int)HttpStatusCode.BadRequest,
-                Type = "https://tools.ietf.org/html/rfc7231#section-6.5.1",
-                Title = "One or more validation errors occurred",
-                Detail = "Please refer to errors property for additional details."
-            };
+            apiResponse = new ApiResponse(
+                Success: false,
+                Message: "One or more validation errors occurred.",
+                Data: null,
+                Errors: errors
+            );
         }
         else
         {
             httpContext.Response.StatusCode = (int)HttpStatusCode.InternalServerError;
-            problemDetails = new ProblemDetails
-            {
-                Status = (int)HttpStatusCode.InternalServerError,
-                Type = "https://tools.ietf.org/html/rfc7231#section-6.6.1",
-                Title = "An unhandled error occurred",
-                Detail = "An internal server error has occurred. Please contact support."
-            };
+            apiResponse = new ApiResponse(
+                Success: false,
+                Message: exception.Message,
+                Data: null,
+                Errors: null
+            );
         }
 
-        await httpContext.Response.WriteAsJsonAsync(problemDetails, cancellationToken);
+        await httpContext.Response.WriteAsJsonAsync(apiResponse, cancellationToken);
         
         return true;
     }
 }
-
