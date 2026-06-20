@@ -9,9 +9,10 @@ public class AuthResultDto
     public string? RefreshToken { get; set; }
     public int? ExpiresIn { get; set; }
     public AuthUserDto? User { get; set; }
+    public string? DeviceTrustToken { get; set; }
 
     public static AuthResultDto SuccessResult(string accessToken, string refreshToken, int expiresIn,
-        AuthUserDto user)
+        AuthUserDto user, string? deviceTrustToken = null)
     {
         return new AuthResultDto
         {
@@ -20,7 +21,8 @@ public class AuthResultDto
             AccessToken = accessToken,
             RefreshToken = refreshToken,
             ExpiresIn = expiresIn,
-            User = user
+            User = user,
+            DeviceTrustToken = deviceTrustToken
         };
     }
 
