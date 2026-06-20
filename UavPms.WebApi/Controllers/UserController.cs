@@ -8,10 +8,13 @@ using UavPms.Core.Interfaces.Services;
 using UavPms.WebApi.Filters;
 using UavPms.Core.Contracts;
 
+using Asp.Versioning;
+
 namespace UavPms.WebApi.Controllers;
 
 [ApiController]
-[Route("api/v1/users")]
+[Route("api/v{version:apiVersion}/users")]
+[ApiVersion("1.0")]
 [Authorize] // Require standard JWT authentication first
 public class UserController : ControllerBase
 {

@@ -96,7 +96,7 @@
 ### Phase 3.1: API Xác thực & Phân quyền (RBAC)
 - [x] 22. **Lệnh Đăng nhập (`LoginCommand` / `POST /login`)**: Kiểm tra tài khoản, đối chiếu hash mật khẩu, trả về Access Token và Refresh Token.
 - [x] 22b. **Lệnh Làm mới Token (`RefreshTokenCommand` / `POST /refresh-token`)**: Kiểm tra Refresh Token còn hạn trong database để cấp lại cặp token mới và hỗ trợ thu hồi.
-- [ ] 22c. **Tách bảng `RefreshTokens` hỗ trợ Multi-Device Session**:
+- [X] 22c. **Tách bảng `RefreshTokens` hỗ trợ Multi-Device Session**:
   - Tạo entity `RefreshToken` riêng biệt với các trường: `Id`, `UserId`, `TokenHash`, `ExpiresAt`, `CreatedAt`, `RevokedAt`, `DeviceInfo`.
   - Xoá 2 cột `RefreshToken` và `RefreshTokenExpiryTime` khỏi bảng `Users`.
   - Hỗ trợ nhiều phiên đăng nhập đồng thời trên nhiều thiết bị (không ghi đè token cũ khi đăng nhập thiết bị mới).
