@@ -1,12 +1,6 @@
 using FluentValidation;
 using Microsoft.AspNetCore.Diagnostics;
-using System;
-using System.Linq;
 using System.Net;
-using System.Threading;
-using System.Threading.Tasks;
-using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.Logging;
 using UavPms.WebApi.Controllers;
 
 namespace UavPms.WebApi.Middlewares;

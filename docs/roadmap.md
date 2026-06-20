@@ -102,9 +102,18 @@
   - Hỗ trợ nhiều phiên đăng nhập đồng thời trên nhiều thiết bị (không ghi đè token cũ khi đăng nhập thiết bị mới).
   - Hỗ trợ chức năng thu hồi token theo session (logout từng thiết bị) và cải thiện khả năng kiểm toán bảo mật.
 - [ ] 22d. **Refactor Auth sang CQRS Pattern (Clean Architecture)**:
-  - Chuyển toàn bộ business logic từ `AuthController` sang Application layer dưới dạng `LoginCommand` + `LoginCommandHandler`, `RefreshTokenCommand` + `RefreshTokenCommandHandler`.
-  - Controller chỉ giữ vai trò điều phối HTTP → gọi `_mediator.Send(command)` → trả về kết quả.
-  - Tạo `AuthResultDto` cho kết quả trả về, xử lý `UnauthorizedAccessException` trong `GlobalExceptionHandler`.
+  - Chuyển toàn bộ business logic từ `AuthController` sang Application layer.
+  - Tạo và triển khai các Command/Handler sau:
+    - `LoginCommand` + `LoginCommandHandler` (`POST /api/v1/auth/login`)
+    - `SendOtpCommand` + `SendOtpCommandHandler` (`POST /api/v1/auth/otp/send`)
+    - `VerifyOtpCommand` + `VerifyOtpCommandHandler` (`POST /api/v1/auth/otp/verify`)
+    - `RefreshTokenCommand` + `RefreshTokenCommandHandler` (`POST /api/v1/auth/refresh-token`)
+    - `ResetPasswordCommand` + `ResetPasswordCommandHandler` (`POST /api/v1/auth/reset-password`)
+  - Áp dụng `AuthResultDto` làm đối tượng trả về chung thay vì các entity/nội dung ẩn danh trực tiếp.
+  - Controller chỉ giữ vai trò nhận HTTP Request -> gọi `_mediator.Send(command)` -> trả về kết quả.
+  - Cập nhật `GlobalExceptionHandler` để xử lý tập trung:
+    - `UnauthorizedAccessException` -> Trả về HTTP 401.
+    - `ValidationException`, `NotFoundException`, `BusinessRuleException` -> Trả về lỗi định dạng chuẩn của hệ thống.
 - [ ] 23. **Truy vấn Profile cá nhân (`GetMyProfileQuery`)**: Lấy thông tin tài khoản hiện tại dựa trên token gửi lên.
 - [ ] 24. **Cấu hình JwtBearerAuthentication**: Đăng ký Middleware xác thực JWT trong `Program.cs`. Thiết lập các Policy bảo vệ API dựa trên các vai trò: `SystemAdmin`, `Manager`, `Inspector`, `Analyst`, `Technician`.
 
@@ -217,7 +226,17 @@
   - Gửi thông báo cho Analyst khi có hình ảnh kiểm tra mới cần duyệt hoặc cảnh báo khẩn cấp mới.
   - Gửi thông báo cho Technician khi có phiếu bảo trì mới được gán.
   - Gửi thông báo cho Manager khi có yêu cầu leo thang cảnh báo hoặc phiếu bảo trì chuyển sang trạng thái chờ nghiệm thu.
-- [ ] 63. **API quản lý thông báo**: API lấy danh sách thông báo cá nhân phân trang (`GetMyNotificationsQuery`) và đánh dấu đã đọc (`MarkNotificationAsReadCommand`).
+- [ ] 63. **Refactor Notification sang CQRS Pattern (Clean Architecture)**:
+  - Chuyển toàn bộ business logic liên quan đến thông báo từ Controllers sang Application layer.
+  - Tạo và triển khai các Command/Handler sau:
+    - `CreateNotificationCommand` + `CreateNotificationCommandHandler`
+    - `MarkNotificationAsReadCommand` + `MarkNotificationAsReadCommandHandler`
+    - `DeleteNotificationCommand` + `DeleteNotificationCommandHandler`
+  - Tạo và triển khai các Query/Handler sau:
+    - `GetNotificationsQuery` + `GetNotificationsQueryHandler`
+    - `GetNotificationByIdQuery` + `GetNotificationByIdQueryHandler`
+  - Sử dụng `NotificationDto` làm đối tượng trả về chung từ Application layer thay vì trả trực tiếp domain entities.
+  - Loại bỏ hoàn toàn sự phụ thuộc trực tiếp vào repository từ controller.
 
 ### Phase 10.2: Truy vấn Thống kê & Xuất dữ liệu (Analytics & Export)
 - [ ] 64. **API Thống kê Xu hướng Sự cố (`GetDefectAnalyticsQuery`)**: Trả về số liệu thống kê về tần suất xuất hiện các nhóm lỗi theo tháng, phân bố mức độ nghiêm trọng của lỗi trên các vùng lưới điện truyền tải.
