@@ -3,7 +3,7 @@ using UavPms.Application.Features.Notifications.DTOs;
 using UavPms.Core.Entities;
 using UavPms.Core.Interfaces.Repositories;
 
-namespace UavPms.Application.Features.Notifications.Commands;
+namespace UavPms.Application.Features.Notifications.Commands.Create;
 
 public class CreateNotificationCommandHandler : IRequestHandler<CreateNotificationCommand, NotificationDto>
 {
