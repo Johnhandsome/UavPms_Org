@@ -128,6 +128,20 @@ public class VerifyOtpCommandHandler : IRequestHandler<VerifyOtpCommand, OtpVeri
             
             resultDto.Token = token;
         }
+        else if (request.OtpPurpose == OtpPurpose.EmailVerification)
+        {
+            var user = await _userRepository.GetByEmailWithRolesAsync(request.Email)
+                       ?? await _userRepository.GetByUsernameWithRolesAsync(request.Email);
+            if (user == null)
+            {
+                throw new NotFoundException("User not found", request.Email);
+            }
+
+            user.IsEmailVerified = true;
+            user.Status = "Active";
+            await _userRepository.UpdateAsync(user);
+            await _unitOfWork.SaveChangesAsync();
+        }
         return resultDto;
     }
     
