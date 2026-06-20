@@ -94,7 +94,7 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy($"AllowFrontend", policy =>
     {
-        policy.WithOrigins("http://localhost:3000") // Chỉ cho phép URL của Frontend truy cập
+        policy.WithOrigins("http://localhost:3000", "http://localhost:5173") // Chỉ cho phép URL của Frontend truy cập
             .AllowAnyMethod()                       // Cho phép mọi method  
             .AllowAnyHeader()                       // Cho phép mọi header  
             .AllowCredentials();                    // Rất quan trọng: Bắt buộc phải có để chạy SignalR sau này
