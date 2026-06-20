@@ -16,8 +16,16 @@ using Asp.Versioning.ApiExplorer;
 using UavPms.WebApi.Swagger;
 using Microsoft.Extensions.Options; 
 using Swashbuckle.AspNetCore.SwaggerGen;
+using Microsoft.AspNetCore.HttpOverrides;
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    options.KnownProxies.Clear();
+    options.KnownNetworks.Clear();
+});
 
 // Cấu hình Serilog in ra Console   
 builder.Host.UseSerilog((context, loggerConfig) =>
@@ -96,6 +104,8 @@ builder.Services.AddCors(options =>
 // XÂY DỰNG ỨNG DỤNG VÀ CẤU HÌNH MIDDLEWARE PIPELINE    
 var app = builder.Build();
 
+app.UseForwardedHeaders();
+
 // Global Exception Handler
 app.UseExceptionHandler();
 
@@ -117,18 +127,6 @@ if (app.Environment.IsDevelopment())
 
     using var scope = app.Services.CreateScope();
     var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-    
-    try
-    {
-        dbContext.Database.ExecuteSqlRaw(@"
-            ALTER TABLE ""Users"" ADD COLUMN IF NOT EXISTS ""RefreshToken"" text NULL;
-            ALTER TABLE ""Users"" ADD COLUMN IF NOT EXISTS ""RefreshTokenExpiryTime"" timestamp with time zone NULL;
-        ");
-    }
-    catch (Exception ex)
-    {
-        Console.WriteLine($"DB HEAL ERROR: {ex}");
-    }
 
     dbContext.Database.Migrate();
     await DatabaseSeeder.SeedAsync(dbContext);
