@@ -5,7 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace UavPms.Application.Features.Monitor.Queries;
+namespace UavPms.Application.Features.Monitor.Queries.GetDashboardSummary;
 
 public record GetDashboardSummaryQuery : IRequest<DashboardSummaryDto>;
 

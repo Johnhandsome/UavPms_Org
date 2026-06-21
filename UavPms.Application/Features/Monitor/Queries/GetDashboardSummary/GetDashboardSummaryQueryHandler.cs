@@ -6,7 +6,7 @@ using System.Text;
 using System.Threading.Tasks;
 using UavPms.Core.Interfaces.Repositories;
 
-namespace UavPms.Application.Features.Monitor.Queries;
+namespace UavPms.Application.Features.Monitor.Queries.GetDashboardSummary;
 
 public class GetDashboardSummaryQueryHandler : IRequestHandler<GetDashboardSummaryQuery, DashboardSummaryDto>
 {

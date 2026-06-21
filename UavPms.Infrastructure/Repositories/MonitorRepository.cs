@@ -41,7 +41,7 @@ namespace UavPms.Infrastructure.Repositories
         {
             var byType = await _context.DetectedAnomalies
                 .Where(a => a.ValidationStatus == "Confirmed")
-                .GroupBy(a => a.Category.CategoryName)
+                .GroupBy(a => a.Category!.CategoryName)
                 .Select(g => new DefectTypeStatModel
                 {
                     DefectType = g.Key,
@@ -99,11 +99,11 @@ namespace UavPms.Infrastructure.Repositories
                 {
                     InspectionId = m.Id,
                     MissionId = m.MissionId,
-                    MissionTitle = !string.IsNullOrEmpty(m.Mission.Description)
+                    MissionTitle = !string.IsNullOrEmpty(m.Mission!.Description)
                     ? m.Mission.Description : m.Mission.MissionCode,
                     ImageUrl = m.FileUrl,
                     IsDefect = m.DetectedAnomalies.Any(a => a.ValidationStatus == "Confirmed"),
-                    DefectType = m.DetectedAnomalies.Where(a => a.ValidationStatus == "Confirmed").Select(a => a.Category.CategoryName).FirstOrDefault() ?? string.Empty,
+                    DefectType = m.DetectedAnomalies.Where(a => a.ValidationStatus == "Confirmed").Select(a => a.Category!.CategoryName).FirstOrDefault() ?? string.Empty,
                     DetectedAt = m.CapturedAt
                 }).ToListAsync(cancellationToken);
 
@@ -138,11 +138,11 @@ namespace UavPms.Infrastructure.Repositories
                 .Select(a => new RecentDefectModel
                 {
                     InspectionId = a.MediaId,
-                    MissionId = a.Media.MissionId,
-                    MissionTitle = !string.IsNullOrEmpty(a.Media.Mission.Description) 
+                    MissionId = a.Media!.MissionId,
+                    MissionTitle = !string.IsNullOrEmpty(a.Media.Mission!.Description) 
                     ? a.Media.Mission.Description : a.Media.Mission.MissionCode,
                     ImageUrl = a.Media.FileUrl,
-                    DefectType = a.Category.CategoryName,
+                    DefectType = a.Category!.CategoryName,
                     DetectedAt = a.CreatedAt
                 }).ToListAsync(cancellationToken);
 
@@ -160,7 +160,7 @@ namespace UavPms.Infrastructure.Repositories
             
             var totalDefects = await _context.DetectedAnomalies.CountAsync(a => a.ValidationStatus == "Confirmed", cancellationToken);
 
-            var criricalDefects = await _context.DetectedAnomalies.CountAsync(a => a.ValidationStatus == "Confirmed" && a.Category.IsEmergencyClass, cancellationToken);
+            var criricalDefects = await _context.DetectedAnomalies.CountAsync(a => a.ValidationStatus == "Confirmed" && a.Category!.IsEmergencyClass, cancellationToken);
 
 
             return new MonitorSummaryModel
