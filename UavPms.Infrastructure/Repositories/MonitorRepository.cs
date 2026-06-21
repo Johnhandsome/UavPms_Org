@@ -66,17 +66,19 @@ namespace UavPms.Infrastructure.Repositories
                 query = query.Where(m => m.MissionId == missionId.Value);
             }
 
-            if(IsDefect.HasValue)
-            {
-                query = query.Where(m => 
-                m.DetectedAnomalies.Any(a => 
-                a.ValidationStatus == "Confirmed"));
-            }
-            else
-            {
-                query = query.Where(m =>
-                !m.DetectedAnomalies.Any(a =>
-                a.ValidationStatus == "Confirmed"));
+            if(IsDefect.HasValue){
+                if(IsDefect.Value)
+                {
+                    query = query.Where(m => 
+                    m.DetectedAnomalies.Any(a => 
+                    a.ValidationStatus == "Confirmed"));
+                }
+                else
+                {
+                    query = query.Where(m =>
+                    !m.DetectedAnomalies.Any(a =>
+                        a.ValidationStatus == "Confirmed"));
+                }
             }
 
             if (fromDate.HasValue) 
@@ -141,7 +143,7 @@ namespace UavPms.Infrastructure.Repositories
                     ? a.Media.Mission.Description : a.Media.Mission.MissionCode,
                     ImageUrl = a.Media.FileUrl,
                     DefectType = a.Category.CategoryName,
-                    DefectedAt = a.CreatedAt
+                    DetectedAt = a.CreatedAt
                 }).ToListAsync(cancellationToken);
 
             return (items, totalCount);

@@ -13,6 +13,6 @@ namespace UavPms.Core.Models.Monitor
         public string MissionTitle { get; set; } = string.Empty;
         public string ImageUrl { get; set; } = string.Empty;
         public string DefectType { get; set; } = string.Empty;
-        public DateTime DefectedAt { get; set; }
+        public DateTime DetectedAt { get; set; }
     }
 }
