@@ -244,3 +244,35 @@
 - [ ] 66. **Tích hợp QuestPDF & EPPlus xuất báo cáo**:
   - Triển khai API xuất danh sách sự cố và vật tư tiêu hao bảo trì ra tệp Excel (`EPPlus`).
   - Triển khai API xuất Báo cáo kỹ thuật tổng hợp tình trạng sức khoẻ lưới điện kèm đồ thị trực quan ra tệp PDF (`QuestPDF`).
+
+---
+
+## EPIC 11: GIÁM SÁT HỆ THỐNG & BẢNG ĐIỀU KHIỂN ADMIN (Admin Monitoring Dashboard)
+
+*Mục tiêu: Xây dựng các API tổng hợp dữ liệu, sẵn sàng cho việc trực quan hóa trên Dashboard giám sát hoạt động kiểm tra, phát hiện lỗi AI, tiến độ chuyến bay và trạng thái hệ thống theo thời gian thực.*
+
+### Phase 11.1: Phát triển APIs Giám sát và Tổng hợp Dữ liệu (CQRS & MediatR)
+- [ ] 67. **API Tóm tắt Số liệu Dashboard (`GET /api/v1/monitor/summary`)**:
+  - Triển khai `GetMonitorSummaryQuery` và `GetMonitorSummaryQueryHandler`.
+  - Tổng hợp số liệu: tổng số chuyến bay (`totalMissions`), số chuyến bay theo trạng thái (`pending`, `inProgress`, `completed`), tổng số ảnh/media kiểm tra (`totalInspections`), tổng số lỗi (`totalDefects`), và số lỗi khẩn cấp (`criticalDefects`).
+- [ ] 68. **API Danh sách Lỗi Mới phát hiện (`GET /api/v1/monitor/recent-defects`)**:
+  - Triển khai `GetRecentDefectsQuery` và `GetRecentDefectsQueryHandler` hỗ trợ phân trang (`page`, `pageSize`).
+  - Trả về danh sách lỗi gần đây kèm thông tin: `inspectionId`, `missionId`, `missionTitle`, `imageUrl`, `defectType`, `detectedAt`.
+- [ ] 69. **API Thống kê Phân loại Lỗi (`GET /api/v1/monitor/defect-statistics`)**:
+  - Triển khai `GetDefectStatisticsQuery` và `GetDefectStatisticsQueryHandler`.
+  - Trả về tổng số lỗi và thống kê nhóm lỗi theo phân loại (`byType` bao gồm tên loại lỗi và số lượng phát hiện) để phục vụ vẽ biểu đồ.
+- [ ] 70. **API Tổng quan Trạng thái Chuyến bay (`GET /api/v1/monitor/mission-status`)**:
+  - Triển khai `GetMissionStatusQuery` và `GetMissionStatusQueryHandler`.
+  - Trả về số lượng chuyến bay theo từng trạng thái: `pending`, `inProgress`, `completed`.
+- [ ] 71. **API Lịch sử Kiểm định và Tìm kiếm (`GET /api/v1/monitor/inspections`)**:
+  - Triển khai `GetInspectionHistoryQuery` và `GetInspectionHistoryQueryHandler` hỗ trợ lọc và phân trang.
+  - Các tham số lọc: `missionId`, `isDefect`, `fromDate`, `toDate`.
+  - Hỗ trợ phân trang: `page`, `pageSize`.
+- [ ] 72. **API Cảnh báo Đang hoạt động (`GET /api/v1/monitor/alerts`)**:
+  - Triển khai `GetActiveAlertsQuery` và `GetActiveAlertsQueryHandler`.
+  - Trả về danh sách cảnh báo chưa đọc từ hệ thống thông báo (`Notifications`) phục vụ bảng điều khiển giám sát.
+
+### Phase 11.2: Chuẩn bị Tích hợp và Tối ưu hóa Real-time
+- [ ] 73. **Thiết kế sẵn sàng cho SignalR Real-time & Event Processing**:
+  - Thiết kế các DTOs tối ưu cho truyền tải thời gian thực.
+  - Tách biệt luồng nghiệp vụ trong Handler để dễ dàng phát tín hiệu (Hub context) khi có sự thay đổi trạng thái chuyến bay hoặc phát hiện lỗi mới từ pipeline AI.

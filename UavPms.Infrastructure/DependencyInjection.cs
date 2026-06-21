@@ -50,7 +50,10 @@ public static class DependencyInjection
 
         // Đăng ký Notification Repository
         services.AddScoped<INotificationRepository, NotificationRepository>();
-        
+
+        // Đăng ký Monitor Repository
+        services.AddScoped<IMonitorRepository, MonitorRepository>();
+
         // Đăng ký HttpContextAccessor và CurrentUserServices
         services.AddHttpContextAccessor();
         services.AddScoped<ICurrentUserServices, CurrentUserServices>();
