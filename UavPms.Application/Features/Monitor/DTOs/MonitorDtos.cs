@@ -16,4 +16,10 @@ public record DashboardSummaryDto(
     int CriticalDefects
 );
     
+public record PaginationMetaData(
+    int Page,
+    int PageSize,
+    int TotalItems,
+    int TotalPages
+);
 

@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using UavPms.Application.Features.Monitor.DTOs;
 
 namespace UavPms.Application.Features.Monitor.Queries.GetRecentDefects;
 
@@ -20,5 +21,5 @@ public record RecentDefectDto(
 
 public record RecentDefectsResponse(
     List<RecentDefectDto> Items,
-    int TotalCount
+    PaginationMetaData Pagination
 );

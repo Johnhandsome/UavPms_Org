@@ -3,7 +3,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using UavPms.Core.Interfaces.Repositories;
-
+using UavPms.Application.Features.Monitor.DTOs;
 
 namespace UavPms.Application.Features.Monitor.Queries.GetRecentDefects;
 
@@ -29,6 +29,16 @@ public class GetRecentDefectsQueryHandler : IRequestHandler<GetRecentDefectsQuer
             x.DetectedAt
             )).ToList();
 
-        return new RecentDefectsResponse(dtos, totalCount);
+        var totalPages = request.PageSize > 0 ? 
+        ((int)Math.Ceiling((double)totalCount / request.PageSize)) : 0;
+
+        var pagination = new PaginationMetaData(
+            request.Page,
+            request.PageSize,
+            totalCount,
+            totalPages
+        );
+
+        return new RecentDefectsResponse(dtos, pagination);
     }
 }

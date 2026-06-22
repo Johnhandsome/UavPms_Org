@@ -1,5 +1,6 @@
 ﻿using MediatR;
 using UavPms.Core.Interfaces.Repositories;
+using UavPms.Application.Features.Monitor.DTOs;
 
 namespace UavPms.Application.Features.Monitor.Queries.GetInspectionHistory;
 
@@ -33,6 +34,16 @@ public class GetInspectionHistoryQueryHandler : IRequestHandler<GetInspectionHis
             x.DetectedAt))
             .ToList();
 
-        return new InspectionHistoryResponse(dtos, totalCount);
+        var totalPages = request.PageSize > 0 ? 
+        ((int)Math.Ceiling((double)totalCount / request.PageSize)) : 0;
+
+        var pagination = new PaginationMetaData(
+            request.Page,
+            request.PageSize,
+            totalCount,
+            totalPages
+        );
+
+        return new InspectionHistoryResponse(dtos, pagination);
     }
 }
