@@ -50,4 +50,16 @@ public class EmailService : IEmailService
             throw new Exception($"SendGrid returned status code {response.StatusCode}");
         }
     }
+
+    public async Task SendEmailAsync(string toEmail, string subject, string body)
+    {
+        var from = new EmailAddress(_fromEmail, _fromName);
+        var to = new EmailAddress(toEmail);
+        var msg = MailHelper.CreateSingleEmail(from, to, subject, body, body);
+        var response = await _client.SendEmailAsync(msg);
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new Exception($"SendGrid returned status code {response.StatusCode} for sending email to {toEmail}");
+        }
+    }
 }

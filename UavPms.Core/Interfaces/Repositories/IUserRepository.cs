@@ -6,4 +6,5 @@ public interface IUserRepository : IGenericRepository<User>
 {
     Task<User?> GetByUsernameWithRolesAsync(string username);
     Task<User?> GetByEmailWithRolesAsync(string email);
+    Task<List<User>> GetUsersByRoleAsync(string roleName);
 }
