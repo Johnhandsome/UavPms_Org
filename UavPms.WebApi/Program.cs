@@ -123,7 +123,10 @@ using (var scope = app.Services.CreateScope())
 
 // Cấu hình Hangfire Dashboard và Custom Pages cho tất cả môi trường
 UavPms.WebApi.HangfireExtensions.HangfireDashboardCustomizer.ConfigureCustomPages();
-app.UseHangfireDashboard();
+app.UseHangfireDashboard("/hangfire", new DashboardOptions
+{
+    Authorization = new[] { new UavPms.WebApi.HangfireExtensions.AllowAllDashboardAuthorizationFilter() }
+});
 
 if (app.Environment.IsDevelopment())
 {
