@@ -175,6 +175,29 @@ public class RefreshTokenCommandHanlderTests
         result.User.Should().NotBeNull();
         result.User!.Roles.Should().Contain("Admin");
         
-        //
+        // verify new refresh token 
+        _refreshTokenRepositoryMock.Verify( r=>
+            r.AddAsync(It.Is<RefreshTokenEntity>(t =>
+                t.UserId == user.Id && 
+                t.DeviceInfo == "UserAgent")), Times.Once);
+        _unitOfWorkMock.Verify(u=>u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
+    }
+    
+    // Test 5: Refresh token đã bị revoke -> UnauthorizedAccessException
+    [Fact]
+    public async Task Handle_ShouldThrowUnauthorized_WhenTokenIsRevoked()
+    {
+        var command = new  RefreshTokenCommand("revoked-token", "UserAgent");
+         
+        _refreshTokenRepositoryMock.Setup(r =>
+            r.FindAsync(It.IsAny<Expression<Func<RefreshTokenEntity, bool>>>(), true))
+            .ReturnsAsync(new List<RefreshTokenEntity>());
+        
+        // act
+        Func<Task> act = async () => await _handler.Handle(command, CancellationToken.None);
+        
+        // assert
+        await act.Should().ThrowAsync<UnauthorizedAccessException>()
+            .WithMessage("Invalid or expired refresh token");
     }
 }
