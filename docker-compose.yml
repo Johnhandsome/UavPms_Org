@@ -20,7 +20,7 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ConnectionStrings__DefaultConnection=${DB_CONNECTION}
-      - Redis__ConnectionString=${REDIS_CONNECTION}
+      - Redis__ConnectionString=redis:6379,abortConnect=false
       - Redis__Password=${REDIS_PASSWORD}
       - Jwt__SecretKey=${JWT_SECRET}
       - Jwt__Issuer=${JWT_ISSUER}

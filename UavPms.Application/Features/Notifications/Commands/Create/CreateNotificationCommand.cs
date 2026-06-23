@@ -6,7 +6,7 @@ namespace UavPms.Application.Features.Notifications.Commands.Create;
 public record CreateNotificationCommand(
     Guid UserId,
     string Type,
-    string ReferenceType,
+    string? ReferenceType,
     Guid? ReferenceId,
     string Title,
     string Body

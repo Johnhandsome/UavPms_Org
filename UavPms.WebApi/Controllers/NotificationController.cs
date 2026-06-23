@@ -82,12 +82,90 @@ public class NotificationController : ControllerBase
         return Ok(new ApiResponse(true, "Notification deleted successfully."));
     }
 
+    [HttpPost("enqueue-email")]
+    public IActionResult EnqueueEmail([FromBody] EnqueueEmailRequest request)
+    {
+        if (string.IsNullOrEmpty(request.Email) || string.IsNullOrEmpty(request.Subject) || string.IsNullOrEmpty(request.Body))
+        {
+            return BadRequest(new ApiResponse(false, "Email, Subject, and Body are required."));
+        }
+
+        var jobId = Hangfire.BackgroundJob.Enqueue<UavPms.Core.Interfaces.Services.IEmailService>(
+            emailService => emailService.SendEmailAsync(request.Email, request.Subject, request.Body));
+
+        return Ok(new { Success = true, Message = "Email job successfully enqueued in Hangfire.", JobId = jobId });
+    }
+
+    [HttpPost("schedule")]
+    public IActionResult ScheduleNotification([FromBody] ScheduleNotificationRequest request)
+    {
+        if (string.IsNullOrEmpty(request.Title) || string.IsNullOrEmpty(request.Body))
+        {
+            return BadRequest(new ApiResponse(false, "Title and Body are required."));
+        }
+
+        DateTimeOffset runAt;
+
+        if (request.ScheduleTime.HasValue)
+        {
+            // If the user provided a specific date/time, convert it to a DateTimeOffset
+            // If the DateTime Kind is Unspecified, treat it as local time or UTC based on preference.
+            // Let's treat it as Local time (since the user is testing from Vietnam +07:00 or UTC).
+            var timeValue = request.ScheduleTime.Value;
+            if (timeValue.Kind == DateTimeKind.Unspecified)
+            {
+                // Convert unspecified/local to UTC or preserve offset
+                runAt = new DateTimeOffset(timeValue, TimeSpan.FromHours(7)); // Vietnam offset
+            }
+            else
+            {
+                runAt = new DateTimeOffset(timeValue);
+            }
+
+            if (runAt < DateTimeOffset.UtcNow)
+            {
+                return BadRequest(new ApiResponse(false, $"ScheduleTime ({runAt:yyyy-MM-dd HH:mm:ss zzz}) cannot be in the past. Current UTC time is {DateTimeOffset.UtcNow:yyyy-MM-dd HH:mm:ss}."));
+            }
+        }
+        else if (request.DelaySeconds.HasValue && request.DelaySeconds.Value > 0)
+        {
+            runAt = DateTimeOffset.UtcNow.AddSeconds(request.DelaySeconds.Value);
+        }
+        else
+        {
+            return BadRequest(new ApiResponse(false, "Either a valid DelaySeconds (greater than 0) or ScheduleTime (in the future) must be provided."));
+        }
+        
+        var jobId = Hangfire.BackgroundJob.Schedule<UavPms.WebApi.Jobs.ScheduledNotificationJob>(
+            job => job.SendNotificationAsync(request.UserId.HasValue ? request.UserId.Value.ToString() : null, request.Title, request.Body, request.Type ?? "ScheduledNotification"),
+            runAt);
+
+        return Ok(new 
+        { 
+            Success = true, 
+            Message = $"Notification scheduled to run at {runAt:yyyy-MM-dd HH:mm:ss zzz}.", 
+            JobId = jobId,
+            Target = request.UserId.HasValue ? $"User: {request.UserId}" : "ALL Users"
+        });
+    }
+
     public record CreateNotificationRequest(
         Guid UserId,
         string Type,
-        string ReferenceType,
+        string? ReferenceType,
         Guid? ReferenceId,
         string Title,
         string Body
+    );
+
+    public record EnqueueEmailRequest(string Email, string Subject, string Body);
+
+    public record ScheduleNotificationRequest(
+        Guid? UserId, 
+        string Title, 
+        string Body, 
+        string? Type, 
+        int? DelaySeconds,
+        DateTime? ScheduleTime
     );
 }

@@ -47,7 +47,7 @@ public class RefreshTokenCommandHandler : IRequestHandler<RefreshTokenCommand, A
         var user = await _userRepository.GetByIdAsync(token.UserId);
         if (user == null || user.Status != "Active")
         {
-            throw new UnauthorizedAccessException("User note found or inactive");
+            throw new UnauthorizedAccessException("User not found or inactive");
         }
         
         token.RevokedAt = DateTime.UtcNow;

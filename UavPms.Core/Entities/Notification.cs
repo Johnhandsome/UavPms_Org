@@ -14,6 +14,8 @@ public class Notification
     public bool IsRead { get; set; }
     public DateTime SentAt { get; set; } = DateTime.UtcNow;
     public DateTime? ReadAt { get; set; }
+    public bool IsPushed { get; set; } = false;
+    public DateTime? PushedAt { get; set; }
 
     public virtual User? User { get; set; }
 }

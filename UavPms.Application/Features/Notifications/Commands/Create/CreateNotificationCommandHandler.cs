@@ -25,7 +25,7 @@ public class CreateNotificationCommandHandler : IRequestHandler<CreateNotificati
             Id = Guid.NewGuid(),
             UserId = request.UserId,
             Type = request.Type,
-            ReferenceType = request.ReferenceType,
+            ReferenceType = request.ReferenceType ?? string.Empty,
             ReferenceId = request.ReferenceId,
             Title = request.Title,
             Body = request.Body,
