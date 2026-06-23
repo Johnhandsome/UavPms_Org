@@ -109,6 +109,7 @@ public class CreateJobPage : RazorPage
                 <div class=""custom-job-panel"">
                     <h3 class=""custom-job-title"">Create Scheduled Job</h3>
                     <form method=""POST"" action=""create-job/submit-custom-job"">
+                        <input type=""hidden"" id=""timezoneOffset"" name=""timezoneOffset"" value=""0"" />
                         <div class=""form-group"">
                             <label class=""custom-form-label"" for=""userIds"">User IDs (Comma-separated Guid list, e.g. guid1, guid2, etc. Leave empty for ALL users)</label>
                             <input type=""text"" class=""form-control custom-form-control"" id=""userIds"" name=""userIds"" placeholder=""e.g. c7b508f7-8742-4b2a-a92c-15a0c3bb20e2, 469bfac4-8b96-4f27-a772-945cff2fbaa8"" />
@@ -149,6 +150,11 @@ public class CreateJobPage : RazorPage
                 if (input) {
                     input.value = localISOTime;
                 }
+                
+                var offsetInput = document.getElementById('timezoneOffset');
+                if (offsetInput) {
+                    offsetInput.value = now.getTimezoneOffset();
+                }
             })();
         </script>
         ");
@@ -175,6 +181,7 @@ public class SubmitCustomJobDispatcher : IDashboardDispatcher
             var body = form["body"].ToString();
             var type = form["type"].ToString();
             var executeAtStr = form["executeAt"].ToString();
+            var timezoneOffsetStr = form["timezoneOffset"].ToString();
 
             if (string.IsNullOrEmpty(type))
             {
@@ -187,7 +194,18 @@ public class SubmitCustomJobDispatcher : IDashboardDispatcher
                 executeAt = parsedDateTime;
             }
 
-            var delay = executeAt - DateTime.Now;
+            var delay = TimeSpan.FromMinutes(5);
+            if (int.TryParse(timezoneOffsetStr, out int offsetMinutes))
+            {
+                var userOffset = TimeSpan.FromMinutes(-offsetMinutes);
+                var executeAtOffset = new DateTimeOffset(executeAt, userOffset);
+                delay = executeAtOffset - DateTimeOffset.UtcNow;
+            }
+            else
+            {
+                delay = executeAt - DateTime.Now;
+            }
+
             if (delay < TimeSpan.Zero)
             {
                 delay = TimeSpan.Zero;
