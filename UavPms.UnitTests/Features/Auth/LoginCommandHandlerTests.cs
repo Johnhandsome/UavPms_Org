@@ -3,6 +3,7 @@ using Microsoft.Extensions.Configuration;
 using Moq;
 using UavPms.Application.Features.Auth.Commands.Login;
 using UavPms.Core.Entities;
+using UavPms.Core.Enums;
 using UavPms.Core.Interfaces.Repositories;
 using UavPms.Core.Interfaces.Services;
 
@@ -45,20 +46,50 @@ public class LoginCommandHandlerTests
         );
     }
 
+    #region  Helper: Create User template with roles
+
+    private static User CreateActivateUser(string email = "user@test.com", string username = "testuser")
+    {
+        return new User
+        {
+            Id = Guid.NewGuid(),
+            Email = email,
+            FullName = "Test User",
+            Username = username,
+            PasswordHash = "hashed_password",
+            Status = "Active",
+            IsEmailVerified = true,
+            UserRoles = new List<UserRole>
+            {
+                new UserRole
+                {
+                    Role = new Role { Id = 1, RoleName = "Operator" }
+                }
+            }
+        };
+    }
+
+    #endregion
+
+    // Test 1: User không tồn tại -> trả về UnauthorizedAccessException
     [Fact]
     public async Task Hanlde_ShouldThrowUnauthorizedException_WhenUserDoesNotExist()
     {
         var command = new LoginCommand("nonexistuser@gmail.com", "password123", null, "UserAgent");
-        _userRepositoryMock.Setup(r => r.GetByEmailWithRolesAsync(command.Email)).ReturnsAsync((User?)null);
-        _userRepositoryMock.Setup(r => r.GetByUsernameWithRolesAsync(command.Email)).ReturnsAsync((User?)null);
+        _userRepositoryMock.Setup(r => 
+            r.GetByEmailWithRolesAsync(command.Email)).ReturnsAsync((User?)null);
+        _userRepositoryMock.Setup(r => 
+            r.GetByUsernameWithRolesAsync(command.Email)).ReturnsAsync((User?)null);
         
         // act 
         Func<Task> act = async () => await _handler.Handle(command, CancellationToken.None);
         
         //assert
-        await act.Should().ThrowAsync<UnauthorizedAccessException>().WithMessage("Invalid credentials");
+        await act.Should().ThrowAsync<UnauthorizedAccessException>().
+            WithMessage("Invalid credentials");
     }
 
+    // Test 2: User status = Inactive -> UnauthorizedAccessException
     [Fact]
     public async Task Handle_ShouldThrowUnauthorizedException_WhenUserIsInactive()
     {
@@ -67,20 +98,145 @@ public class LoginCommandHandlerTests
         var user = new User
         {
             Email = command.Email,
-            Status = "Inactive"
+            Status = "Inactive",
+            IsEmailVerified = true,
         };
-        _userRepositoryMock.Setup(r => r.GetByEmailWithRolesAsync(command.Email)).ReturnsAsync(user);
+        _userRepositoryMock.Setup(r => 
+            r.GetByEmailWithRolesAsync(command.Email))
+            .ReturnsAsync(user);
         
         //act
         Func<Task> act = async () => await _handler.Handle(command, CancellationToken.None);
         
         // assert
-        act.Should().ThrowAsync<UnauthorizedAccessException>().WithMessage("Invalid credentials");
+        act.Should().ThrowAsync<UnauthorizedAccessException>()
+            .WithMessage("Invalid credentials");
     }
 
+    // Test 3: Password sai -> UnauthorizedAccessException
     [Fact]
     public async Task Handle_ShouldThrowUnauthorizedException_WhenPasswordIsIncorrect()
     {
+        // arrange 
+        var user = CreateActivateUser();
+        var command = new LoginCommand(user.Email, "wrongpassword", null, "UserAgent");
         
+        _userRepositoryMock.Setup(r =>
+            r.GetByEmailWithRolesAsync(command.Email)).ReturnsAsync(user);
+        _passwordHasherMock.Setup(p =>
+            p.Verify(user.PasswordHash, command.Password)).Returns(false);
+        
+        // act 
+        Func<Task> act = async () => await _handler.Handle(command, CancellationToken.None);
+        
+        // assert
+        await act.Should().ThrowAsync<UnauthorizedAccessException>()
+            .WithMessage("Invalid credentials");
+    }
+    
+    // Test 4: Email chưa verify _> UnauthorizedAccessException
+    [Fact]
+    public async Task Handle_ShouldThrowUnauthorizedException_WhenEmailIsNotVerified()
+    {
+        // arrange
+        var user = CreateActivateUser();
+        user.IsEmailVerified = false;
+        var command = new LoginCommand(user.Email, "correctPassword", null, "UserAgent");
+        
+        _userRepositoryMock.Setup(r =>
+            r.GetByEmailWithRolesAsync(command.Email)).ReturnsAsync(user);
+        _passwordHasherMock.Setup(p =>
+            p.Verify(user.PasswordHash, command.Password)).Returns(true);
+        
+        // act
+        Func<Task> act = async () => await _handler.Handle(command, CancellationToken.None);
+        
+        // assert
+        await act.Should().ThrowAsync<UnauthorizedAccessException>()
+            .WithMessage("Invalid credentials");
+    }
+    
+    // Test 5: Login thành công KHÔNG có trusted device -> Trả về OTP required
+    [Fact]
+    public async Task Handle_ShouldReturnOtpRequired_WhenNoTrustedDevices()
+    {
+        // arrange
+        var user = CreateActivateUser();
+        var command = new LoginCommand(user.Email, "password123", null, "UserAgent");
+        
+        _userRepositoryMock.Setup(r =>
+            r.GetByEmailWithRolesAsync(command.Email)).ReturnsAsync(user);
+        _passwordHasherMock.Setup(p =>
+            p.Verify(user.PasswordHash, command.Password)).Returns(true);
+        _otpServiceMock.Setup(o =>
+            o.GenerateAndSendOtpAsync(user.Email, OtpPurpose.Login, false))
+            .ReturnsAsync((true, "OTP sent"));
+        
+        // act
+        var result = await _handler.Handle(command, CancellationToken.None);
+        
+        // assert
+        result.Should().NotBeNull();
+        result.OtpRequired.Should().BeTrue();
+        result.Email.Should().Be(user.Email);
+        result.AccessToken.Should().BeNull();
+        result.RefreshToken.Should().BeNull();
+        
+        // Verify interactions
+        _refreshTokenRepositoryMock.Verify(r =>
+            r.AddAsync(It.IsAny<RefreshToken>()), Times.Once);
+        _unitOfWorkMock.Verify(u =>
+            u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
+    }
+    
+    // Test 7: Login bằng Username (không phải email) cũng phải hoạt động
+    [Fact]
+    public async Task Handle_ShouldFindUserByUsername_WhenEmailLookupReturnsNull()
+    {
+        var user = CreateActivateUser();
+        var command = new LoginCommand(user.Email, "password123", null, "UserAgent");
+        
+        // email lookup trả null, username trả usre
+        _userRepositoryMock.Setup(r =>
+            r.GetByUsernameWithRolesAsync(command.Email)).ReturnsAsync((User?)null);
+        _userRepositoryMock.Setup(r =>
+            r.GetByUsernameWithRolesAsync(command.Email)).ReturnsAsync(user);
+        _passwordHasherMock.Setup(p =>
+            p.Verify(user.PasswordHash, command.Password)).Returns(true);
+        _otpServiceMock.Setup(o =>
+            o.GenerateAndSendOtpAsync(user.Email, OtpPurpose.Login, false))
+            .ReturnsAsync((true, "OTP sent"));
+        
+        // act
+        var result = await _handler.Handle(command, CancellationToken.None);
+        
+        // assert
+        result.Should().NotBeNull();
+        result.OtpRequired.Should().BeTrue();
+        _userRepositoryMock.Verify(r => 
+            r.GetByUsernameWithRolesAsync(command.Email), Times.Once);
+    }
+    
+    // Test 8: OTP gửi thất bại -> Throw Exception
+    [Fact]
+    public async Task Handle_ShouldThrowException_WhenOtpSendFails()
+    {
+        var user = CreateActivateUser();
+        var command = new LoginCommand(user.Email, "password123", null, "UserAgent");
+        
+        _userRepositoryMock.Setup(r =>
+            r.GetByUsernameWithRolesAsync(command.Email)).ReturnsAsync(user);
+        _passwordHasherMock.Setup(p =>
+            p.Verify(user.PasswordHash, command.Password)).Returns(true);
+        _otpServiceMock.Setup(o =>
+            o.GenerateAndSendOtpAsync(user.Email, OtpPurpose.Login, false))
+            .ReturnsAsync((false, "Rate limit exceeded"));
+        
+        // act
+        Func<Task> act = async () => await _handler.Handle(command, CancellationToken.None);
+        
+        // assert
+        await act.Should().ThrowAsync<Exception>()
+            .WithMessage("Rate limit exceeded");
     }
 }
