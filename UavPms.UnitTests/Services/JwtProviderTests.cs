@@ -126,7 +126,7 @@ public class JwtProviderTests
         // arrange
         var configMock = new Mock<IConfiguration>();
         configMock.Setup(c => c["Jwt:SecretKey"]).Returns((string?)null);
-        var provider = new JwtProvider(_configMock.Object);
+        var provider = new JwtProvider(configMock.Object);
 
         var user = new User
         {
@@ -141,7 +141,7 @@ public class JwtProviderTests
 
         // assert
         act.Should().Throw<InvalidOperationException>()
-            .WithMessage("Jwt:SecretKey not configured");
+            .WithMessage("Jwt:SecretKey is not configured.");
     }
 
     // test 6: SteupUp token expire in 5 minutes
@@ -225,7 +225,7 @@ public class JwtProviderTests
             ClockSkew = TimeSpan.Zero,
         };
         
-        Action act = () => handler.ValidateToken(tokenString, validataionParams, out _);
+        Action act = () => handler.ValidateToken(tamperedToken, validataionParams, out _);
         act.Should().Throw<SecurityTokenException>();
     }
 }

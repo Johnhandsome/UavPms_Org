@@ -24,6 +24,7 @@ public class BCryptPasswordHasherTests
         hash.Should().StartWith("$2");
     }
 
+    [Fact]
     public void Hash_ShouldProduceDifferentHashes_ForSamePassword()
     {
         var password = "SuperSecretPassword123!@#";
