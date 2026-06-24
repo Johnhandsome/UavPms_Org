@@ -122,7 +122,7 @@
   - Thực hiện xác thực mật khẩu giả định (dummy verification) khi người dùng không tồn tại hoặc không hoạt động nhằm chuẩn hoá thời gian phản hồi giữa user tồn tại và không tồn tại.
 - [X] 22g. **Xác thực Chủ sở hữu của Step-Up Token**:
   - So sánh định danh người dùng trong Step-Up token với định danh người dùng đang đăng nhập trong `HttpContext.User` trước khi cho phép thực hiện hành động cần Step-Up.
-- [ ] 23. **Truy vấn Profile cá nhân (`GetMyProfileQuery`)**: Lấy thông tin tài khoản hiện tại dựa trên token gửi lên.
+- [X] 23. **Truy vấn Profile cá nhân (`GetMyProfileQuery`)**: Lấy thông tin tài khoản hiện tại dựa trên token gửi lên.
 - [X] 24. **Cấu hình JwtBearerAuthentication**: Đăng ký Middleware xác thực JWT trong `Program.cs`. Thiết lập các Policy bảo vệ API dựa trên các vai trò: `SystemAdmin`, `Manager`, `Inspector`, `Analyst`, `Technician`.
 - [X] 24b. **Bảo mật Endpoint Giám sát (`MonitorController`)**:
   - Áp dụng thuộc tính `[Authorize]` lên `MonitorController` để chặn truy cập ẩn danh.
