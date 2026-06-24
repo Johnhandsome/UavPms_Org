@@ -37,6 +37,14 @@ public class MonitorController : ControllerBase
     [Authorize(Roles = "SystemAdmin, Manager, Analyst, Technician")]
     public async Task<IActionResult> GetRecentDefects([FromQuery] int page = 1, [FromQuery] int pageSize = 10)
     {
+        if(page <= 0 || pageSize <= 0)
+        {
+            return BadRequest(new ApiResponse(false, "Page and PageSize must be greater than 0."));
+        }
+        if(pageSize > 100)
+        {
+            return BadRequest(new ApiResponse(false, "PageSize must be less than or equal to 100."));
+        }
         var result = await _mediator.Send(new GetRecentDefectsQuery(page, pageSize));
         return Ok(result);
     }

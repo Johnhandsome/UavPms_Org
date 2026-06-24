@@ -106,7 +106,7 @@ public class LoginCommandHandlerTests
         _userRepositoryMock.Setup(r => 
             r.GetByEmailWithRolesAsync(command.Email))
             .ReturnsAsync(user);
-        _passwordHasher.Setup(p =>
+        _passwordHasherMock.Setup(p =>
             p.Verify(It.IsAny<string>(), It.IsAny<string>())).Returns(false);
         
         //act
