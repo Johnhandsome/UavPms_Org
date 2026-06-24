@@ -14,7 +14,7 @@ public class CreateUserCommandHandler : IRequestHandler<CreateUserCommand, Guid>
     private readonly IUserRepository _userRepository;
     private readonly IGenericRepository<Role> _roleRepository;
     private readonly IPasswordHasher _passwordHasher;
-    private readonly IUnitOfWork _unitOfWork
+    private readonly IUnitOfWork _unitOfWork;
 
     public CreateUserCommandHandler(
         IUserRepository userRepository,
@@ -34,23 +34,23 @@ public class CreateUserCommandHandler : IRequestHandler<CreateUserCommand, Guid>
         var existingEmail = await _userRepository.GetByEmailWithRolesAsync(request.Email);
         if (existingEmail != null)
         {
-            throw ArgumentException("Email already exists.");
+            throw new ArgumentException("Email already exists.");
         }
 
         var existingUsername = await _userRepository.GetByUsernameWithRolesAsync(request.Username);
         if(existingUsername != null)
         {
-            throw ArgumentException("Username already exists");
+            throw new ArgumentException("Username already exists");
         }
 
-        var rolesInDb = await _roleRepository.FindAllByExpressionAsync(r => request.Roles.Contains(r.RoleName));
+        var rolesInDb = await _roleRepository.FindAsync(r => request.Roles.Contains(r.RoleName));
         
         var user = new User
         {
             Id = Guid.NewGuid(),
             Username = request.Username,
             Email = request.Email,
-            PasswordHash = _passwordHasher.HashPassword(request.Password),
+            PasswordHash = _passwordHasher.Hash(request.Password),
             FullName = request.FullName,
             Phone = request.Phone,
             CreatedAt = DateTime.Now,
@@ -65,7 +65,7 @@ public class CreateUserCommandHandler : IRequestHandler<CreateUserCommand, Guid>
         }).ToList();
 
         await _userRepository.AddAsync(user);
-        await _unitOfWork.CommitAsync();
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         return user.Id;
     }

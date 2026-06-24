@@ -19,7 +19,7 @@ public class GetMyProfileQueryHandler : IRequestHandler<GetMyProfileQuery, AuthU
         var user = await _userRepository.GetByIdWithRolesAsync(request.UserId);
         if (user == null || user.Status == "Inactive")
         {
-            throw new UnauthorizedAccessException("User not found or inactiev");
+            throw new UnauthorizedAccessException("User not found or inactive");
         }
 
         return new AuthUserDto

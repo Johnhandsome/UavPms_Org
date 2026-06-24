@@ -1,14 +1,8 @@
 using FluentAssertions;
 using Moq;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 using UavPms.Application.Features.Users.Queries.GetMyProfile;
 using UavPms.Core.Entities;
 using UavPms.Core.Interfaces.Repositories;
-using Xunit;
 
 namespace UavPms.UnitTests.Features.Users.Queries.GetMyProfile;
 
@@ -36,7 +30,7 @@ public class GetMyProfileQueryHandlerTests
         Func<Task> act = async () => await _handler.Handle(query, CancellationToken.None);
         
         await act.Should().ThrowAsync<UnauthorizedAccessException>()
-            .WithMessage($"User {userId} not found or inactive");
+            .WithMessage($"User not found or inactive");
     }
     
     [Fact]
@@ -50,6 +44,7 @@ public class GetMyProfileQueryHandlerTests
             Username = "test",
             Email = "test@user.com",
             FullName = "test",
+            Status = "Inactive"
         };
         
         _mockUserRepo.Setup(u => u.GetByIdWithRolesAsync(userId))
@@ -58,7 +53,7 @@ public class GetMyProfileQueryHandlerTests
         Func<Task> act = async () => await _handler.Handle(query, CancellationToken.None);
         
         await act.Should().ThrowAsync<UnauthorizedAccessException>()
-            .WithMessage($"User {userId} is not found or inactive");
+            .WithMessage($"User not found or inactive");
     }
 
     [Fact]
