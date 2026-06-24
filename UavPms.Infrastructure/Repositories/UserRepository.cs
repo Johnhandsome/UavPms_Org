@@ -36,4 +36,12 @@ public class UserRepository : GenericRepository<User>, IUserRepository
             .Where(u => u.UserRoles.Any(ur => ur.Role!.RoleName == roleName))
             .ToListAsync();
     }
+
+    public async Task<User?> GetByIdWithRolesAsync(Guid id)
+    {
+        return await _context.Users
+            .Include(u => u.UserRoles)
+                .ThenInclude(ur => ur.Role)
+            .FirstOrDefaultAsync(u => u.Id == id);
+    }
 }

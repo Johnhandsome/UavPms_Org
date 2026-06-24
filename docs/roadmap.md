@@ -114,9 +114,13 @@
   - Cập nhật `GlobalExceptionHandler` để xử lý tập trung:
     - `UnauthorizedAccessException` -> Trả về HTTP 401.
     - `ValidationException`, `NotFoundException`, `BusinessRuleException` -> Trả về lỗi định dạng chuẩn của hệ thống.
+- [X] 22e. **Sửa lỗi NullReferenceException khi làm mới Token (Refresh Token)**:
+  - Định nghĩa phương thức `GetByIdWithRolesAsync(Guid id)` trong `IUserRepository` và cài đặt trong `UserRepository` để nạp kèm (Eager Loading) `UserRoles` và `Role`.
+  - Cập nhật `RefreshTokenCommandHandler` để gọi `GetByIdWithRolesAsync` thay vì `GetByIdAsync`.
+  - Chạy Unit Test đảm bảo logic hoạt động chính xác.
 - [ ] 23. **Truy vấn Profile cá nhân (`GetMyProfileQuery`)**: Lấy thông tin tài khoản hiện tại dựa trên token gửi lên.
-- [ ] 24. **Cấu hình JwtBearerAuthentication**: Đăng ký Middleware xác thực JWT trong `Program.cs`. Thiết lập các Policy bảo vệ API dựa trên các vai trò: `SystemAdmin`, `Manager`, `Inspector`, `Analyst`, `Technician`.
-- [ ] 24b. **Bảo mật Endpoint Giám sát (`MonitorController`)**:
+- [X] 24. **Cấu hình JwtBearerAuthentication**: Đăng ký Middleware xác thực JWT trong `Program.cs`. Thiết lập các Policy bảo vệ API dựa trên các vai trò: `SystemAdmin`, `Manager`, `Inspector`, `Analyst`, `Technician`.
+- [X] 24b. **Bảo mật Endpoint Giám sát (`MonitorController`)**:
   - Áp dụng thuộc tính `[Authorize]` lên `MonitorController` để chặn truy cập ẩn danh.
   - Phân quyền chi tiết (Role-based Authorization) cho từng endpoint dựa trên vai trò của người dùng (ví dụ: `SystemAdmin`, `Manager`, `Analyst`, `Inspector`, `Technician` truy cập tương ứng với nhiệm vụ).
   - Kiểm tra và đảm bảo các endpoint: `GET /summary`, `GET /recent-defects`, `GET /defects-statistics`, `GET /mission-status`, `GET /inspections`, và `GET /alerts` từ chối người dùng chưa xác thực (401 Unauthorized) hoặc không đủ quyền (403 Forbidden).
