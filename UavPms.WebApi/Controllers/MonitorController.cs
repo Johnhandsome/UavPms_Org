@@ -42,6 +42,7 @@ public class MonitorController : ControllerBase
     }
 
     [HttpGet("defects-statistics")]
+    [Authorize(Roles = "SystemAdmin, Manager, Analyst")]
     public async Task<IActionResult> GetDefectStatistics()
     {
         var result = await _mediator.Send(new GetDefectStatisticsQuery());
