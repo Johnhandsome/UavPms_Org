@@ -7,6 +7,8 @@ using UavPms.Core.Interfaces.Repositories;
 using UavPms.Core.Interfaces.Services;
 using UavPms.WebApi.Filters;
 using UavPms.Core.Contracts;
+using MediatR;
+using UavPms.Application.Features.Users.Queries.GetMyProfile;
 
 using Asp.Versioning;
 
@@ -22,17 +24,34 @@ public class UserController : ControllerBase
     private readonly IPasswordHasher _passwordHasher;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IOtpService _otpService;
+    private readonly ISender _mediator;
 
     public UserController(
         IUserRepository userRepository, 
         IPasswordHasher passwordHasher, 
         IUnitOfWork unitOfWork,
-        IOtpService otpService)
+        IOtpService otpService,
+        ISender mediator)
     {
         _userRepository = userRepository;
         _passwordHasher = passwordHasher;
         _unitOfWork = unitOfWork;
         _otpService = otpService;
+        _mediator = mediator;
+    }
+
+    [HttpGet("me")]
+    public async Task<IActionResult> GetMyProfile()
+    {
+        var userIdString =  User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (!Guid.TryParse(userIdString, out var userId))
+        {
+            return Unauthorized(new ApiResponse(false, "Invalid user token."));
+        }
+        
+        var result = await _mediator.Send(new GetMyProfileQuery(userId));
+        
+        return Ok(new ApiResponse(true, "Profile retrieved successfully.", result));
     }
 
     [HttpPost("change-password")]

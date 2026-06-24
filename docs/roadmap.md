@@ -118,9 +118,9 @@
   - Định nghĩa phương thức `GetByIdWithRolesAsync(Guid id)` trong `IUserRepository` và cài đặt trong `UserRepository` để nạp kèm (Eager Loading) `UserRoles` và `Role`.
   - Cập nhật `RefreshTokenCommandHandler` để gọi `GetByIdWithRolesAsync` thay vì `GetByIdAsync`.
   - Chạy Unit Test đảm bảo logic hoạt động chính xác.
-- [ ] 22f. **Chống Tấn công Dò quét Tài khoản (Timing Attack) trong Đăng nhập**:
+- [X] 22f. **Chống Tấn công Dò quét Tài khoản (Timing Attack) trong Đăng nhập**:
   - Thực hiện xác thực mật khẩu giả định (dummy verification) khi người dùng không tồn tại hoặc không hoạt động nhằm chuẩn hoá thời gian phản hồi giữa user tồn tại và không tồn tại.
-- [ ] 22g. **Xác thực Chủ sở hữu của Step-Up Token**:
+- [X] 22g. **Xác thực Chủ sở hữu của Step-Up Token**:
   - So sánh định danh người dùng trong Step-Up token với định danh người dùng đang đăng nhập trong `HttpContext.User` trước khi cho phép thực hiện hành động cần Step-Up.
 - [ ] 23. **Truy vấn Profile cá nhân (`GetMyProfileQuery`)**: Lấy thông tin tài khoản hiện tại dựa trên token gửi lên.
 - [X] 24. **Cấu hình JwtBearerAuthentication**: Đăng ký Middleware xác thực JWT trong `Program.cs`. Thiết lập các Policy bảo vệ API dựa trên các vai trò: `SystemAdmin`, `Manager`, `Inspector`, `Analyst`, `Technician`.
@@ -128,7 +128,7 @@
   - Áp dụng thuộc tính `[Authorize]` lên `MonitorController` để chặn truy cập ẩn danh.
   - Phân quyền chi tiết (Role-based Authorization) cho từng endpoint dựa trên vai trò của người dùng (ví dụ: `SystemAdmin`, `Manager`, `Analyst`, `Inspector`, `Technician` truy cập tương ứng với nhiệm vụ).
   - Kiểm tra và đảm bảo các endpoint: `GET /summary`, `GET /recent-defects`, `GET /defects-statistics`, `GET /mission-status`, `GET /inspections`, và `GET /alerts` từ chối người dùng chưa xác thực (401 Unauthorized) hoặc không đủ quyền (403 Forbidden).
-- [ ] 24c. **Giới hạn kích thước trang (Pagination Upper-Bound Validation)**:
+- [X] 24c. **Giới hạn kích thước trang (Pagination Upper-Bound Validation)**:
   - Ràng buộc tham số `pageSize <= 100` tại các endpoint của `MonitorController` (`recent-defects` và `inspections`) để tránh cạn kiệt tài nguyên (DoS).
 
 ### Phase 3.2: Quản trị Người dùng & Tự động ghi nhận Audit Log
