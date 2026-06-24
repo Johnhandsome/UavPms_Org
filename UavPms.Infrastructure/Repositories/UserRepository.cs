@@ -27,4 +27,13 @@ public class UserRepository : GenericRepository<User>, IUserRepository
                 .ThenInclude(ur => ur.Role)
             .FirstOrDefaultAsync(u => u.Email == email);
     }
+
+    public async Task<List<User>> GetUsersByRoleAsync(string roleName)
+    {
+        return await _context.Users
+            .Include(u => u.UserRoles)
+                .ThenInclude(ur => ur.Role)
+            .Where(u => u.UserRoles.Any(ur => ur.Role!.RoleName == roleName))
+            .ToListAsync();
+    }
 }

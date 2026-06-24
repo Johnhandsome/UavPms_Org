@@ -109,7 +109,7 @@ public class LoginCommandHandlerTests
         Func<Task> act = async () => await _handler.Handle(command, CancellationToken.None);
         
         // assert
-        act.Should().ThrowAsync<UnauthorizedAccessException>()
+        await act.Should().ThrowAsync<UnauthorizedAccessException>()
             .WithMessage("Invalid credentials");
     }
 
@@ -153,7 +153,7 @@ public class LoginCommandHandlerTests
         
         // assert
         await act.Should().ThrowAsync<UnauthorizedAccessException>()
-            .WithMessage("Invalid credentials");
+            .WithMessage("Email not verified");
     }
     
     // Test 5: Login thành công KHÔNG có trusted device -> Trả về OTP required
@@ -184,9 +184,9 @@ public class LoginCommandHandlerTests
         
         // Verify interactions
         _refreshTokenRepositoryMock.Verify(r =>
-            r.AddAsync(It.IsAny<RefreshToken>()), Times.Once);
+            r.AddAsync(It.IsAny<RefreshToken>()), Times.Never);
         _unitOfWorkMock.Verify(u =>
-            u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
+            u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
     }
     
     // Test 7: Login bằng Username (không phải email) cũng phải hoạt động

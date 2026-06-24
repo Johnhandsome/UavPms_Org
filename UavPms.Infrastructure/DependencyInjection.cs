@@ -30,8 +30,17 @@ public static class DependencyInjection
             options.ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning));
         });
         
-        // Đăng ký RabbitMQ Connection helper dưới dạng Singleton (Tạm thời tắt để chạy offline)
-        // services.AddSingleton<RabbitMqConnection>();
+        // Đăng ký RabbitMQ Connection (conditional - fallback to NoOp)
+        var rabbitHost = configuration["RabbitMQ:HostName"];
+        if (!string.IsNullOrEmpty(rabbitHost))
+        {
+            services.AddSingleton<RabbitMqConnection>();
+            services.AddScoped<IEventPublisher, RabbitMqEventPublisher>();
+        }
+        else
+        {
+            services.AddScoped<IEventPublisher, NoOpEventPublisher>();
+        }
 
         // Đăng ký Unit of Work và Generic Repository
         services.AddScoped<IUnitOfWork, UnitOfWork>();
@@ -76,7 +85,6 @@ public static class DependencyInjection
         }
 
         services.AddScoped<IOtpService, RedisOtpService>();
-        services.AddScoped<IEventPublisher, NoOpEventPublisher>();
 
         // Đăng ký OTP Purpose Handlers (Strategy pattern)
         services.AddScoped<IOtpPurposeHandler, UavPms.Infrastructure.Services.OtpHandlers.LoginOtpHandler>();

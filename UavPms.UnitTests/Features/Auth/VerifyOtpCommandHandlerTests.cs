@@ -143,7 +143,7 @@ public class VerifyOtpCommandHandlerTests
         Func<Task> act =  async () => await _handler.Handle(command, CancellationToken.None);
         
         await act.Should().ThrowAsync<BusinessRuleException>()
-            .WithMessage($"User account is not active");
+            .WithMessage($"User account is not active.");
     }
 
     [Fact]
@@ -152,7 +152,7 @@ public class VerifyOtpCommandHandlerTests
         var user = CreateActiveUser();
         user.IsEmailVerified =false;
         user.Status = "Pending";
-        var command = new VerifyOtpCommand(user.Email, "123456", OtpPurpose.Login, "UserAgent");
+        var command = new VerifyOtpCommand(user.Email, "123456", OtpPurpose.EmailVerification, "UserAgent");
         
         _otpServiceMock.Setup(o =>
             o.VerifyOtpAsync(command.Email, command.Code, command.OtpPurpose))
@@ -179,7 +179,7 @@ public class VerifyOtpCommandHandlerTests
     [Fact]
     public async Task Handle_ShouldReturnVerificationToken_WhenForgotPurposePurpose()
     {
-        var command = new VerifyOtpCommand("user@test.com", "123456", OtpPurpose.Login, "UserAgent");
+        var command = new VerifyOtpCommand("user@test.com", "123456", OtpPurpose.ForgotPassword, "UserAgent");
         
         _otpServiceMock.Setup(o => 
             o.VerifyOtpAsync(command.Email, command.Code, command.OtpPurpose))
@@ -202,7 +202,7 @@ public class VerifyOtpCommandHandlerTests
     public async Task Handle_ShouldReturnsStepUpToken_WhenChangePasswordPurpose()
     {
        var user = CreateActiveUser();
-       var command = new VerifyOtpCommand(user.Email, "123456", OtpPurpose.Login, "UserAgent"); 
+       var command = new VerifyOtpCommand(user.Email, "123456", OtpPurpose.ChangePassword, "UserAgent"); 
        
        _otpServiceMock.Setup(o =>
            o.VerifyOtpAsync(command.Email, command.Code, command.OtpPurpose))

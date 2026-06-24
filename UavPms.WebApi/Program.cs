@@ -100,21 +100,25 @@ builder.Services.AddApplicationServices();
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddProblemDetails();
 
-//Consumers (Tạm thời tắt để chạy offline)
-// builder.Services.AddHostedService<MissionCreatedConsumer>();
-// builder.Services.AddHostedService<DefectDetectedConsumer>();
+// RabbitMQ Consumers (chỉ khởi động khi có cấu hình RabbitMQ)
+if (!string.IsNullOrEmpty(builder.Configuration["RabbitMQ:HostName"]))
+{
+    builder.Services.AddHostedService<MissionCreatedConsumer>();
+    builder.Services.AddHostedService<DefectDetectedConsumer>();
+}
 
-//Hangfire (Tạm thời tắt để chạy offline)
-// builder.Services.AddHangfire(config =>
-// {
-//    config.UsePostgreSqlStorage(options =>
-//        options.UseNpgsqlConnection(builder.Configuration.GetConnectionString("DefaultConnection")),
-//        new PostgreSqlStorageOptions{
-//         PrepareSchemaIfNecessary = true
-//        });
-// });
+// Hangfire - Background Job Processing
+builder.Services.AddHangfire(config =>
+{
+    config.UsePostgreSqlStorage(options =>
+        options.UseNpgsqlConnection(builder.Configuration.GetConnectionString("DefaultConnection")),
+        new PostgreSqlStorageOptions
+        {
+            PrepareSchemaIfNecessary = true
+        });
+});
 
-// builder.Services.AddHangfireServer();
+builder.Services.AddHangfireServer();
 
 // CẤU HÌNH CORS POLICY 
 builder.Services.AddCors(options =>
@@ -136,9 +140,21 @@ app.UseForwardedHeaders();
 // Global Exception Handler
 app.UseExceptionHandler();
 
-// Cấu hình môi trường Development (bật swagger)
-// Hangfire Dashboard (Development-only for security)
-// Tự động chạy Migration khi khởi động (dev-only)
+// Tự động chạy Migration và Seed dữ liệu khi khởi động ứng dụng
+using (var scope = app.Services.CreateScope())
+{
+    var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+    dbContext.Database.Migrate();
+    await DatabaseSeeder.SeedAsync(dbContext);
+}
+
+// Cấu hình Hangfire Dashboard và Custom Pages cho tất cả môi trường
+UavPms.WebApi.HangfireExtensions.HangfireDashboardCustomizer.ConfigureCustomPages();
+app.UseHangfireDashboard("/hangfire", new DashboardOptions
+{
+    Authorization = new[] { new UavPms.WebApi.HangfireExtensions.AllowAllDashboardAuthorizationFilter() }
+});
+
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -150,30 +166,23 @@ if (app.Environment.IsDevelopment())
             options.SwaggerEndpoint($"/swagger/{description.GroupName}/swagger.json", description.GroupName.ToUpperInvariant());
         }
     });
-    // app.UseHangfireDashboard();
-
-    using var scope = app.Services.CreateScope();
-    var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-
-    dbContext.Database.Migrate();
-    await DatabaseSeeder.SeedAsync(dbContext);
 }
 
-// Đăng ký các Hangfire Recurring Jobs (Tạm thời tắt để chạy offline)
-// using (var scope = app.Services.CreateScope())
-// {
-//     var recurringJobManager = scope.ServiceProvider.GetRequiredService<IRecurringJobManager>();
-//     
-//     recurringJobManager.AddOrUpdate<CleanupJob>(
-//         "auto-cleanup-job",
-//         job => job.Execute(),
-//         Cron.Daily);
-// 
-//     recurringJobManager.AddOrUpdate<DailySummaryJob>(
-//         "daily-summary-job",
-//         job => job.Execute(),
-//         Cron.Daily);
-// }
+// Đăng ký các Hangfire Recurring Jobs
+RecurringJob.AddOrUpdate<CleanupJob>(
+    "auto-cleanup-job",
+    job => job.Execute(),
+    Cron.Weekly);
+
+RecurringJob.AddOrUpdate<DailySummaryJob>(
+    "daily-summary-job",
+    job => job.Execute(),
+    Cron.Daily);
+
+RecurringJob.AddOrUpdate<PushNotificationsJob>(
+    "push-notifications-sync",
+    job => job.Execute(),
+    Cron.Minutely);
 
 app.UseHttpsRedirection();
 

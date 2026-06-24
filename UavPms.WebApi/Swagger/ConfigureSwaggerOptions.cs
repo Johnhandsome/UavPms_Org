@@ -30,7 +30,7 @@ public class ConfigureSwaggerOptions : IConfigureOptions<SwaggerGenOptions>
             Scheme = "Bearer",
             BearerFormat = "JWT",
             In = ParameterLocation.Header,
-            Description = "JWT Authorization header using the Bearer scheme."
+            Description = "Nhập JWT Token theo định dạng: Bearer {your_token}"
         });
         
         // Yêu cầu áp dụng cấu hình bảo mật JWT cho tất cả API trên Swagger UI
@@ -45,7 +45,7 @@ public class ConfigureSwaggerOptions : IConfigureOptions<SwaggerGenOptions>
                         Id = "Bearer"
                     }
                 },
-                Array.Empty<string>()
+                System.Array.Empty<string>()
             }
         });
     }
