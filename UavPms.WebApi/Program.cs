@@ -17,6 +17,9 @@ using UavPms.WebApi.Swagger;
 using Microsoft.Extensions.Options; 
 using Swashbuckle.AspNetCore.SwaggerGen;
 using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
+using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
