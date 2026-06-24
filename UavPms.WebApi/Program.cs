@@ -66,6 +66,30 @@ builder.Services.AddApiVersioning(options =>
         options.SubstituteApiVersionInUrl = true;
     });
 
+// đăng ký cầu hình xắc thực JWT Bearer
+builder.Services.AddAuthentication(options =>
+    {
+        options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+        options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+    })
+    .AddJwtBearer(options =>
+    {
+        var jwtSettings = builder.Configuration.GetSection("Jwt");
+        var secretKey = jwtSettings["SecretKey"] ??
+                        throw new InvalidOperationException("Jwt:SecretKey is not configured in appsettings.");
+
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            ValidIssuer = jwtSettings["Issuer"],
+            ValidAudience = jwtSettings["Audience"],
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey))
+        };
+    });
+
 // Đăng ký dịch vụ cấu hình Swagger tự động theo phiên bản
 builder.Services.AddTransient<IConfigureOptions<SwaggerGenOptions>, ConfigureSwaggerOptions>();
 builder.Services.AddSwaggerGen();

@@ -21,6 +21,33 @@ public class ConfigureSwaggerOptions : IConfigureOptions<SwaggerGenOptions>
         {
             options.SwaggerDoc(description.GroupName, CreateInfoForApiVersion(description));
         }
+        
+        // Định nghĩa Schema bảo mật Bearer Token cho Swagger
+        options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+        {
+            Name = "Authorization",
+            Type = SecuritySchemeType.ApiKey,
+            Scheme = "Bearer",
+            BearerFormat = "JWT",
+            In = ParameterLocation.Header,
+            Description = "JWT Authorization header using the Bearer scheme."
+        });
+        
+        // Yêu cầu áp dụng cấu hình bảo mật JWT cho tất cả API trên Swagger UI
+        options.AddSecurityRequirement(new OpenApiSecurityRequirement
+        {
+            {
+                new OpenApiSecurityScheme
+                {
+                    Reference = new OpenApiReference
+                    {
+                        Type = ReferenceType.SecurityScheme,
+                        Id = "Bearer"
+                    }
+                },
+                Array.Empty<string>()
+            }
+        });
     }
 
     private static OpenApiInfo CreateInfoForApiVersion(ApiVersionDescription description)
