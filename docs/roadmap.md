@@ -132,7 +132,7 @@
   - Ràng buộc tham số `pageSize <= 100` tại các endpoint của `MonitorController` (`recent-defects` và `inspections`) để tránh cạn kiệt tài nguyên (DoS).
 
 ### Phase 3.2: Quản trị Người dùng & Tự động ghi nhận Audit Log
-- [ ] 25. **CRUD API quản lý người dùng (Users)**: Chỉ tài khoản có vai trò `SystemAdmin` mới được phép tạo mới, cập nhật thông tin, thay đổi vai trò (Role) hoặc đình chỉ (suspend) tài khoản khác.
+- [X] 25. **CRUD API quản lý người dùng (Users)**: Chỉ tài khoản có vai trò `SystemAdmin` mới được phép tạo mới, cập nhật thông tin, thay đổi vai trò (Role) hoặc đình chỉ (suspend) tài khoản khác.
 - [ ] 26. **EF Core Interceptor / SaveChanges Override**: Viết bộ lắng nghe tự động ghi log thay đổi. Trước khi lưu vào DB, kiểm tra các thay đổi ở trạng thái Added/Modified/Deleted, so sánh giá trị cũ và mới để sinh bản ghi chèn tự động vào bảng `AuditLogs` (tự động ghi nhận IP người gọi và UserAgent).
 - [ ] 27. **API truy cập lịch sử Audit (`GetAuditLogsQuery`)**: Dành riêng cho `SystemAdmin` và `Manager` giám sát các tác vụ nhạy cảm trong hệ thống.
 

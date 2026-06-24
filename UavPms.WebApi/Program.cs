@@ -190,7 +190,12 @@ app.UseHttpsRedirection();
 app.UseCors("AllowFrontend");
 
 // Cấu hình Middleware để phục vụ file tĩnh (Ảnh bằng chứng)
-var imagePath = builder.Configuration["FileStorage:AlertImagesPath"] ?? Path.Combine(builder.Environment.ContentRootPath, "uav_storage", "images");
+var rawPath = builder.Configuration["FileStorage:AlertImagesPath"] 
+    ?? "uav_storage/images";
+
+var imagePath = Path.IsPathRooted(rawPath)
+    ? rawPath
+    : Path.Combine(builder.Environment.ContentRootPath, rawPath);
 
 try
 {
