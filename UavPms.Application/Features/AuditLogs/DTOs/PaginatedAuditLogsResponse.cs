@@ -4,5 +4,5 @@ using UavPms.Core.Entities;
 namespace UavPms.Application.Features.AuditLogs.DTOs;
 
 public record PaginatedAuditLogsResponse(
-    List<AuditLog> Items,
+    List<AuditLogDto> Items,
     PaginationMetaData Pagination);

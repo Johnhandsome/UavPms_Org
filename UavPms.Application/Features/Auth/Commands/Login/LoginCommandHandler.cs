@@ -68,7 +68,7 @@ public class LoginCommandHandler : IRequestHandler<LoginCommand, AuthResultDto>
             throw new UnauthorizedAccessException("Invalid credentials");
         }
 
-        if (!user.IsEmailVerified)
+        if (!user!.IsEmailVerified)
         {
             throw new UnauthorizedAccessException("Email not verified");
         }
