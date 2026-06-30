@@ -5,7 +5,7 @@ using UavPms.Core.Interfaces.Services;
 
 namespace UavPms.Application.Features.Missions.Queries.GetMy;
 
-public class GetMyMissionsQueryHandler : IRequestHandler<GetMymissionsQuery, List<MissionDto>>
+public class GetMyMissionsQueryHandler : IRequestHandler<GetMyMissionsQuery, List<MissionDto>>
 {
     private readonly IMissionRepository _missionRepository;
     private readonly ICurrentUserServices _currentUserServices;
@@ -18,7 +18,7 @@ public class GetMyMissionsQueryHandler : IRequestHandler<GetMymissionsQuery, Lis
         _currentUserServices = currentUserServices;
     }
     
-    public async Task<List<MissionDto>> Handle(GetMymissionsQuery request, CancellationToken cancellationToken)
+    public async Task<List<MissionDto>> Handle(GetMyMissionsQuery request, CancellationToken cancellationToken)
     {
         var currentUserId = _currentUserServices.UserId;
         if (currentUserId == Guid.Empty)
