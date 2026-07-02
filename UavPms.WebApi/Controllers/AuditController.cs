@@ -13,11 +13,11 @@ namespace UavPms.WebApi.Controllers;
 [Route("api/v{version:apiVersion}/audit-logs")]
 [ApiVersion("1.0")]
 [Authorize]
-public class AuditContrller : ControllerBase
+public class AuditController : ControllerBase
 {
     private readonly ISender _mediator;
     
-    public AuditContrller(ISender mediator)
+    public AuditController(ISender mediator)
     {
         _mediator = mediator;
     }
@@ -33,7 +33,7 @@ public class AuditContrller : ControllerBase
     {
         if (page <= 0 || pageSize <= 0)
         {
-            return BadRequest(new ApiResponse(false, "Page and PageSize must be positive integeres."));
+            return BadRequest(new ApiResponse(false, "Page and PageSize must be positive integers."));
         }
 
         if (pageSize > 100)

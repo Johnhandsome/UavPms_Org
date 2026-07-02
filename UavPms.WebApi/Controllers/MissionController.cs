@@ -19,6 +19,11 @@ public class MissionController : ControllerBase
 {
     private readonly ISender _mediator;
 
+    public MissionController(ISender mediator)
+    {
+        _mediator = mediator;
+    }
+
     [HttpPost]
     [Authorize(Roles = "SystemAdmin, Manager")]
     public async Task<IActionResult> Create([FromBody] CreateMissionCommand command)
@@ -61,12 +66,12 @@ public class MissionController : ControllerBase
     {
         if (page <= 0 || pageSize <= 0)
         {
-            return BadRequest(new ApiResponse(true, "Invalid page or page size"));
+            return BadRequest(new ApiResponse(false, "Invalid page or page size"));
         }
 
         if (pageSize > 100)
         {
-            return BadRequest(new ApiResponse(true, "Invalid page or page size"));
+            return BadRequest(new ApiResponse(false, "Invalid page or page size"));
         }
         
         var query = new ListMissionsQuery(page,  pageSize, search, status);
@@ -78,8 +83,8 @@ public class MissionController : ControllerBase
     [Authorize(Roles = "SystemAdmin, Manager")]
     public async Task<IActionResult> Get(Guid id)
     {
-        var resulut = await _mediator.Send(new GetMissionDetailsQuery(id));
-        return Ok(new ApiResponse(true, "Mission details retrieved successfully", resulut));
+        var result = await _mediator.Send(new GetMissionDetailsQuery(id));
+        return Ok(new ApiResponse(true, "Mission details retrieved successfully", result));
     }
 
     [HttpGet("my")]
@@ -97,4 +102,4 @@ public record UpdateMissionRequest(
     Guid AssignedToUserId,
     string DroneCode,
     string Status,
-    string?  Description);
+    string? Description);
