@@ -3,7 +3,7 @@ namespace UavPms.Application.Features.Missions.DTOs;
 public class MissionDto
 {
     public Guid Id { get; set; }
-    public string MissionCode { get; set; }
+    public string MissionCode { get; set; } = string.Empty;
     public string Title { get; set; } = string.Empty;
     public string RouteData { get; set; } = string.Empty;
     public Guid AssignedToUserId { get; set; }
