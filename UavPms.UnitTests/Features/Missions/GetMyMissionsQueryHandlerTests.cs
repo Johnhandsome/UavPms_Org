@@ -1,6 +1,6 @@
 using FluentAssertions;
 using Moq;
-using UavPms.Application.Features.Missions.Queries.GetMy;
+using UavPms.Application.Features.Missions.Queries.GetMyMissions;
 using UavPms.Core.Entities;
 using UavPms.Core.Interfaces.Repositories;
 using UavPms.Core.Interfaces.Services;

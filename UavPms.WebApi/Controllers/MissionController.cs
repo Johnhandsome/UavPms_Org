@@ -5,9 +5,9 @@ using Microsoft.AspNetCore.Mvc;
 using UavPms.Application.Features.Missions.Commands.CreateMission;
 using UavPms.Application.Features.Missions.Commands.DeleteMission;
 using UavPms.Application.Features.Missions.Commands.UpdateMission;
-using UavPms.Application.Features.Missions.Queries.GetDetails;
-using UavPms.Application.Features.Missions.Queries.GetMy;
-using UavPms.Application.Features.Missions.Queries.Lists;
+using UavPms.Application.Features.Missions.Queries.GetMissionDetails;
+using UavPms.Application.Features.Missions.Queries.GetMyMissions;
+using UavPms.Application.Features.Missions.Queries.ListMissions;
 
 namespace UavPms.WebApi.Controllers;
 

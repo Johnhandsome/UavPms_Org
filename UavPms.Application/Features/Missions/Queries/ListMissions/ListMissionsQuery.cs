@@ -1,7 +1,7 @@
 using MediatR;
 using UavPms.Application.Features.Missions.DTOs;
 
-namespace UavPms.Application.Features.Missions.Queries.Lists;
+namespace UavPms.Application.Features.Missions.Queries.ListMissions;
 
 public record ListMissionsQuery(
     int Page,

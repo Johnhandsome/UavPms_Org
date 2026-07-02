@@ -3,7 +3,7 @@ using UavPms.Application.Common.Exceptions;
 using UavPms.Application.Features.Missions.DTOs;
 using UavPms.Core.Interfaces.Repositories;
 
-namespace UavPms.Application.Features.Missions.Queries.GetDetails;
+namespace UavPms.Application.Features.Missions.Queries.GetMissionDetails;
 
 public class GetMissionDetailsQueryHandler : IRequestHandler<GetMissionDetailsQuery, MissionDto>
 {

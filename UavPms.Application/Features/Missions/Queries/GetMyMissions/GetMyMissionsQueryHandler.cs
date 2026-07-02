@@ -3,7 +3,7 @@ using UavPms.Application.Features.Missions.DTOs;
 using UavPms.Core.Interfaces.Repositories;
 using UavPms.Core.Interfaces.Services;
 
-namespace UavPms.Application.Features.Missions.Queries.GetMy;
+namespace UavPms.Application.Features.Missions.Queries.GetMyMissions;
 
 public class GetMyMissionsQueryHandler : IRequestHandler<GetMyMissionsQuery, List<MissionDto>>
 {

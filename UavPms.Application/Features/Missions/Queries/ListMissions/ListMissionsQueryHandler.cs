@@ -3,7 +3,7 @@ using UavPms.Application.Features.Missions.DTOs;
 using UavPms.Application.Features.Users.DTOs;
 using UavPms.Core.Interfaces.Repositories;
 
-namespace UavPms.Application.Features.Missions.Queries.Lists;
+namespace UavPms.Application.Features.Missions.Queries.ListMissions;
 
 public class ListMissionsQueryHandler : IRequestHandler<ListMissionsQuery, PaginatedMissionsResponse>
 {
