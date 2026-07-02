@@ -145,24 +145,24 @@ public class NotificationController : ControllerBase
             JobId = jobId, 
             Target = request.UserId.HasValue ? $"User: {request.UserId}" : "ALL Users" }));
     }
-
-    public record CreateNotificationRequest(
-        Guid UserId,
-        string Type,
-        string? ReferenceType,
-        Guid? ReferenceId,
-        string Title,
-        string Body
-    );
-
-    public record EnqueueEmailRequest(string Email, string Subject, string Body);
-
-    public record ScheduleNotificationRequest(
-        Guid? UserId, 
-        string Title, 
-        string Body, 
-        string? Type, 
-        int? DelaySeconds,
-        DateTime? ScheduleTime
-    );
 }
+
+public record CreateNotificationRequest(
+    Guid UserId,
+    string Type,
+    string? ReferenceType,
+    Guid? ReferenceId,
+    string Title,
+    string Body
+);
+
+public record EnqueueEmailRequest(string Email, string Subject, string Body);
+
+public record ScheduleNotificationRequest(
+    Guid? UserId, 
+    string Title, 
+    string Body, 
+    string? Type, 
+    int? DelaySeconds,
+    DateTime? ScheduleTime
+);
