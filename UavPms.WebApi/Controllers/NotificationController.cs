@@ -47,7 +47,7 @@ public class NotificationController : ControllerBase
     {
         var query = new GetNotificationByIdQuery(id);
         var result = await _mediator.Send(query);
-        return Ok(new ApiResponse(true, "Notification retrieved successfully", result);
+        return Ok(new ApiResponse(true, "Notification retrieved successfully", result));
     }
 
     [HttpPut("{id:guid}/read")]
