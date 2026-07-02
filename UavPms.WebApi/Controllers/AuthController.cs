@@ -95,11 +95,11 @@ public class AuthController : ControllerBase
         var command = new RefreshTokenCommand(request.RefreshToken, userAgent);
         var result = await _mediator.Send(command);
 
-        return Ok(new
+        return Ok(new ApiResponse(true, "Refresh token success.", new
         {
             result.AccessToken,
             result.RefreshToken
-        });
+        }));
     }
 
     [HttpPost("reset-password")]
@@ -109,10 +109,11 @@ public class AuthController : ControllerBase
         await _mediator.Send(command);
         return Ok(new ApiResponse(true, "Password reset successfully."));
     }
-
-    public record LoginRequest(string Email, string Password);
-    public record RefreshTokenRequest(string RefreshToken);
-    public record SendOtpRequest(string Email, OtpPurpose Purpose);
-    public record VerifyOtpRequest(string Email, string Otp, OtpPurpose Purpose);
-    public record ResetPasswordRequest(string VerificationToken, string NewPassword);
 }
+
+
+public record LoginRequest(string Email, string Password);
+public record RefreshTokenRequest(string RefreshToken);
+public record SendOtpRequest(string Email, OtpPurpose Purpose);
+public record VerifyOtpRequest(string Email, string Otp, OtpPurpose Purpose);
+public record ResetPasswordRequest(string VerificationToken, string NewPassword);

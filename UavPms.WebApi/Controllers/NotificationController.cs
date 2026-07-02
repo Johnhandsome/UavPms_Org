@@ -6,9 +6,9 @@ using MediatR;
 using UavPms.Core.Contracts;
 using UavPms.Application.Features.Notifications.Queries.GetNotifications;
 using UavPms.Application.Features.Notifications.Queries.GetNotificationById;
-using UavPms.Application.Features.Notifications.Commands.Create;
-using UavPms.Application.Features.Notifications.Commands.MarkAsRead;
-using UavPms.Application.Features.Notifications.Commands.Delete;
+using UavPms.Application.Features.Notifications.Commands.CreateNotification;
+using UavPms.Application.Features.Notifications.Commands.DeleteNotification;
+using UavPms.Application.Features.Notifications.Commands.MarkNotificationAsRead;
 
 namespace UavPms.WebApi.Controllers;
 
