@@ -39,7 +39,7 @@ public class NotificationController : ControllerBase
 
         var query = new GetNotificationsQuery(userGuid);
         var result = await _mediator.Send(query);
-        return Ok(result);
+        return Ok(new ApiResponse(true, "Notifications retrieved successfully", result));
     }
 
     [HttpGet("{id:guid}")]
@@ -47,7 +47,7 @@ public class NotificationController : ControllerBase
     {
         var query = new GetNotificationByIdQuery(id);
         var result = await _mediator.Send(query);
-        return Ok(result);
+        return Ok(new ApiResponse(true, "Notification retrieved successfully", result);
     }
 
     [HttpPut("{id:guid}/read")]
@@ -93,7 +93,7 @@ public class NotificationController : ControllerBase
         var jobId = Hangfire.BackgroundJob.Enqueue<UavPms.Core.Interfaces.Services.IEmailService>(
             emailService => emailService.SendEmailAsync(request.Email, request.Subject, request.Body));
 
-        return Ok(new { Success = true, Message = "Email job successfully enqueued in Hangfire.", JobId = jobId });
+        return Ok(new ApiResponse(true, "Email job successfully enqueued in Hangfire.", new { JobId = jobId }));
     }
 
     [HttpPost("schedule")]
@@ -140,13 +140,10 @@ public class NotificationController : ControllerBase
             job => job.SendNotificationAsync(request.UserId.HasValue ? request.UserId.Value.ToString() : null, request.Title, request.Body, request.Type ?? "ScheduledNotification"),
             runAt);
 
-        return Ok(new 
+        return Ok(new ApiResponse(true, "Notification scheduled to run at " + runAt, new 
         { 
-            Success = true, 
-            Message = $"Notification scheduled to run at {runAt:yyyy-MM-dd HH:mm:ss zzz}.", 
-            JobId = jobId,
-            Target = request.UserId.HasValue ? $"User: {request.UserId}" : "ALL Users"
-        });
+            JobId = jobId, 
+            Target = request.UserId.HasValue ? $"User: {request.UserId}" : "ALL Users" }));
     }
 
     public record CreateNotificationRequest(
