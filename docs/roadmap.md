@@ -137,7 +137,7 @@
   - Kiểm tra và đảm bảo các endpoint: `GET /summary`, `GET /recent-defects`, `GET /defects-statistics`, `GET /mission-status`, `GET /inspections`, và `GET /alerts` từ chối người dùng chưa xác thực (401 Unauthorized) hoặc không đủ quyền (403 Forbidden).
 - [X] 24c. **Giới hạn kích thước trang (Pagination Upper-Bound Validation)**:
   - Ràng buộc tham số `pageSize <= 100` tại các endpoint của `MonitorController` (`recent-defects` và `inspections`) để tránh cạn kiệt tài nguyên (DoS).
-- [ ] 24d. **Chuẩn hóa Phân quyền RBAC toàn bộ API Endpoints theo Authorization Matrix**:
+- [X] 24d. **Chuẩn hóa Phân quyền RBAC toàn bộ API Endpoints theo Authorization Matrix**:
   - Áp dụng phân quyền vai trò (SystemAdmin, Manager, Inspector, Analyst, MaintenanceTechnician) trên toàn bộ endpoints của 4 Microservices (`IdentityService`, `OperationsService`, `AIInspectionService`, `NotificationService`).
   - Định nghĩa tập trung `UserRoles.cs` trong `UavPms.Shared.Contracts` thay cho hardcode chuỗi role trong Controller.
   - Kiểm tra quyền sở hữu tài nguyên (Inspector assigned mission, User owned notification) trả về HTTP 403 Forbidden.
@@ -182,8 +182,8 @@
 - [x] 30. **Nhập dữ liệu hàng loạt từ file Excel (`ImportTowersCommand`)**: Đọc file Excel danh sách cột điện truyền tải cùng toạ độ địa lý, thực hiện bulk insert tối ưu hiệu năng và tự động gán các loại thiết bị (`Assets`) mặc định lên các cột tương ứng.
 
 ### Phase 4.2: Truy vấn Không gian Bản đồ (GIS API)
-- [ ] 31. **Truy vấn lấy tài sản theo viewport bản đồ (`GetAssetsInBoundingBoxQuery`)**: Nhận toạ độ hộp giới hạn (Bounding Box: MinLat, MinLng, MaxLat, MaxLng) từ bản đồ LeafletJS, trả về danh sách các cột điện, trạm biến áp nằm bên trong vùng hiển thị để tối ưu băng thông.
-- [ ] 32. **Định dạng dữ liệu sự cố dạng GeoJSON (`GetDefectsGeoJsonQuery`)**: Query danh sách các `DetectedAnomalies` đang hoạt động kèm vị trí toạ độ địa lý của cột điện chứa lỗi, format chuẩn định dạng GeoJSON để frontend LeafletJS render trực tiếp lên bản đồ nhiệt (Heatmap) hoặc bản đồ điểm (Marker Cluster).
+- [x] 31. **Truy vấn lấy tài sản theo viewport bản đồ (`GetAssetsInBoundingBoxQuery`)**: Nhận toạ độ hộp giới hạn (Bounding Box: MinLat, MinLng, MaxLat, MaxLng) từ bản đồ LeafletJS, trả về danh sách các cột điện, trạm biến áp nằm bên trong vùng hiển thị để tối ưu băng thông.
+- [x] 32. **Định dạng dữ liệu sự cố dạng GeoJSON (`GetDefectsGeoJsonQuery`)**: Query danh sách các `DetectedAnomalies` đang hoạt động kèm vị trí toạ độ địa lý của cột điện chứa lỗi, format chuẩn định dạng GeoJSON để frontend LeafletJS render trực tiếp lên bản đồ nhiệt (Heatmap) hoặc bản đồ điểm (Marker Cluster).
 
 ---
 
