@@ -52,4 +52,14 @@ public class AnomalyRepository : GenericRepository<DetectedAnomaly>, IAnomalyRep
             .Where(a => a.AssetId == assetId)
             .ToListAsync();
     }
+
+    public async Task<IReadOnlyList<DetectedAnomaly>> GetActiveAnomaliesWithSpatialLocationAsync()
+    {
+        return await _context.DetectedAnomalies
+            .Include(a => a.Category)
+            .Include(a => a.Asset)
+            .ThenInclude(a => a!.Tower)
+            .Where(a => !a.IsDeleted && a.ValidationStatus != "Rejected")
+            .ToListAsync();
+    }
 }

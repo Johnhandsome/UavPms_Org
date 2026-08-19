@@ -8,4 +8,5 @@ public interface IAnomalyRepository : IGenericRepository<DetectedAnomaly>
     Task<IReadOnlyList<DetectedAnomaly>> GetAllWithDetailsAsync();
     Task<IReadOnlyList<DetectedAnomaly>> GetPendingWithDetailsAsync();
     Task<IReadOnlyList<DetectedAnomaly>> GetByAssetIdWithDetailsAsync(Guid assetId);
+    Task<IReadOnlyList<DetectedAnomaly>> GetActiveAnomaliesWithSpatialLocationAsync();
 }

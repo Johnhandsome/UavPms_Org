@@ -1,4 +1,6 @@
 using Microsoft.EntityFrameworkCore;
+using NetTopologySuite;
+using NetTopologySuite.Geometries;
 using UavPms.OperationsService.Domain.Entities;
 using UavPms.OperationsService.Domain.Interfaces.Repositories;
 using UavPms.OperationsService.Infrastructure.Persistence;
@@ -34,5 +36,16 @@ public class SubstationRepository : GenericRepository<Substation>, ISubstationRe
             .ToListAsync();
         
         return (items, totalCount);
+    }
+
+    public async Task<IReadOnlyList<Substation>> GetSubstationsInBoundingBoxAsync(double minLat, double minLng, double maxLat, double maxLng)
+    {
+        var geometryFactory = NtsGeometryServices.Instance.CreateGeometryFactory(srid: 4326);
+        var envelope = new Envelope(minLng, maxLng, minLat, maxLat);
+        var box = geometryFactory.ToGeometry(envelope);
+        
+        return await _context.Substations
+            .Where(s => !s.IsDeleted && s.Geom != null && s.Geom.Within(box))
+            .ToListAsync();
     }
 }

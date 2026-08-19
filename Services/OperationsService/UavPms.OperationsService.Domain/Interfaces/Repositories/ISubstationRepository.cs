@@ -10,4 +10,7 @@ Task<(IReadOnlyList<Substation> Items, int TotalCount)> GetSubstationsPagedAsync
         Guid? regionAssetId,
         string? searchTerm
     );
+
+    Task<IReadOnlyList<Substation>> GetSubstationsInBoundingBoxAsync(double minLat, double minLng, double maxLat,
+        double maxLng);
 }
