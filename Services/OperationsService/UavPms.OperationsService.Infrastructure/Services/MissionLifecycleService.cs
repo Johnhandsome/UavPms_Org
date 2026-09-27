@@ -40,6 +40,38 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
                 .FirstOrDefaultAsync(x => x.PreMissionAssessmentId == request.PreMissionAssessmentId.Value, ct);
             if (existingMission != null)
             {
+                if (request.Assignments != null && request.Assignments.Count > 0)
+                {
+                    foreach (var a in request.Assignments)
+                    {
+                        if (a.UserId != Guid.Empty && !existingMission.Assignments.Any(x => x.UserId == a.UserId && x.Status == MissionAssignmentStatus.Active))
+                        {
+                            existingMission.Assignments.Add(new MissionAssignment
+                            {
+                                MissionId = existingMission.Id,
+                                UserId = a.UserId,
+                                AssignmentRole = !string.IsNullOrWhiteSpace(a.Role) ? a.Role : "PILOT",
+                                AssignedByUserId = _current.UserId,
+                                IsRequired = a.IsRequired ?? true,
+                                ResponseStatus = MissionAssignmentResponse.Pending
+                            });
+                        }
+                    }
+                }
+                if (request.DroneId.HasValue && (!existingMission.UavId.HasValue || existingMission.UavId.Value == Guid.Empty))
+                {
+                    existingMission.UavId = request.DroneId.Value;
+                }
+                if (request.AssignedToUserId.HasValue && (!existingMission.InspectorId.HasValue || existingMission.InspectorId.Value == Guid.Empty))
+                {
+                    existingMission.InspectorId = request.AssignedToUserId.Value;
+                }
+                if (!existingMission.InspectorId.HasValue || existingMission.InspectorId.Value == Guid.Empty)
+                {
+                    var ins = existingMission.Assignments.FirstOrDefault(x => x.AssignmentRole.Equals("Inspector", StringComparison.OrdinalIgnoreCase) || x.AssignmentRole.Equals("Pilot", StringComparison.OrdinalIgnoreCase));
+                    if (ins != null) existingMission.InspectorId = ins.UserId;
+                }
+                await _db.SaveChangesAsync(ct);
                 return existingMission;
             }
         }
@@ -272,11 +304,36 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
         var mission = await ManagedMission(missionId, ct, true); RequirePreExecution(mission);
         var user = await _db.Users.SingleOrDefaultAsync(x => x.Id == request.UserId, ct) ?? throw new NotFoundException("User", request.UserId);
         if (!IsActive(user.Status)) throw new BusinessRuleException("ASSIGNEE_INACTIVE");
-        if (await _db.MissionAssignments.AnyAsync(x => x.MissionId == missionId && x.UserId == request.UserId && x.Status == MissionAssignmentStatus.Active, ct))
-            throw new BusinessRuleException("DUPLICATE_ASSIGNMENT");
+        var existing = await _db.MissionAssignments.FirstOrDefaultAsync(x => x.MissionId == missionId && x.UserId == request.UserId && x.Status == MissionAssignmentStatus.Active, ct);
+        if (existing != null)
+        {
+            if (!string.IsNullOrWhiteSpace(request.AssignmentRole))
+            {
+                existing.AssignmentRole = request.AssignmentRole;
+            }
+            if (request.AssignmentRole.Equals("Inspector", StringComparison.OrdinalIgnoreCase) || request.AssignmentRole.Equals("Pilot", StringComparison.OrdinalIgnoreCase))
+            {
+                if (!mission.InspectorId.HasValue || mission.InspectorId.Value == Guid.Empty)
+                {
+                    mission.InspectorId = request.UserId;
+                    mission.AssignedToUserId = request.UserId;
+                }
+            }
+            await _db.SaveChangesAsync(ct);
+            return existing;
+        }
         var assignment = new MissionAssignment { MissionId = missionId, UserId = request.UserId, AssignmentRole = request.AssignmentRole, AssignedByUserId = _current.UserId };
-        _db.MissionAssignments.Add(assignment); mission.Assignments.Add(assignment); mission.RecalculateReadiness();
-        Notify(request.UserId, mission, "MISSION_ASSIGNED"); Audit(mission.Id, "MISSION_ASSIGNMENT_ADDED");
+        _db.MissionAssignments.Add(assignment); mission.Assignments.Add(assignment);
+        if (request.AssignmentRole.Equals("Inspector", StringComparison.OrdinalIgnoreCase) || request.AssignmentRole.Equals("Pilot", StringComparison.OrdinalIgnoreCase))
+        {
+            if (!mission.InspectorId.HasValue || mission.InspectorId.Value == Guid.Empty)
+            {
+                mission.InspectorId = request.UserId;
+                mission.AssignedToUserId = request.UserId;
+            }
+        }
+        mission.RecalculateReadiness();
+        Notify(request.UserId, mission, "MISSION_ASSIGNED", request.AssignmentRole); Audit(mission.Id, "MISSION_ASSIGNMENT_ADDED");
         await _db.SaveChangesAsync(ct); return assignment;
     }
 
@@ -294,10 +351,10 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
     {
         var mission = await ManagedMission(missionId, ct, true); RequirePreExecution(mission);
         var drone = await _db.Uavs.SingleOrDefaultAsync(x => x.Id == droneId, ct) ?? throw new NotFoundException("Drone", droneId);
-        if (drone.Status != DroneStatus.Idle) throw new BusinessRuleException("DRONE_UNAVAILABLE");
+        if (drone.Status != DroneStatus.Idle && mission.UavId != droneId) throw new BusinessRuleException("DRONE_UNAVAILABLE");
         if (await _db.Missions.AnyAsync(x => x.Id != missionId && x.UavId == droneId && x.Status != MissionStatus.Completed && x.Status != MissionStatus.Cancelled, ct))
             throw new BusinessRuleException("DRONE_ALREADY_RESERVED");
-        var replaced = mission.UavId != Guid.Empty; mission.UavId = droneId; mission.RecalculateReadiness();
+        var replaced = mission.UavId != Guid.Empty && mission.UavId != droneId; mission.UavId = droneId; mission.RecalculateReadiness();
         Audit(mission.Id, replaced ? "DRONE_REPLACED" : "DRONE_ASSIGNED"); await _db.SaveChangesAsync(ct);
     }
 
