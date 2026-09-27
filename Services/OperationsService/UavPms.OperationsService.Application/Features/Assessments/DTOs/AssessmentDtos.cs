@@ -42,7 +42,7 @@ public record DroneMetricSubmitDto(
 public record DroneInspectionSubmitRequest(
     Guid DroneId,
     string? Notes,
-    List<DroneMetricSubmitDto> Metrics,
+    List<DroneMetricSubmitDto>? Metrics = null,
     string? PolicyVersion = "v2.0"
 );
 

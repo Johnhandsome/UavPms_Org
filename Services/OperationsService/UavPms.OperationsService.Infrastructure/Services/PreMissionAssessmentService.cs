@@ -115,7 +115,8 @@ public sealed class PreMissionAssessmentService
         _db.PreMissionAssessments.Add(assessment);
         Audit(assessment.Id, "ASSESSMENT_CREATED");
         await SaveWithConcurrency(ct);
-        return assessment;
+
+        return await EvaluateAsync(assessment.Id, ct);
     }
 
     public async Task<PreMissionAssessment> GetAsync(Guid id, CancellationToken ct)
@@ -124,8 +125,8 @@ public sealed class PreMissionAssessmentService
 
         var assessment = await _db.PreMissionAssessments
             .Include(x => x.Assets).ThenInclude(a => a.Asset)
-            .Include(x => x.PersonnelCandidates).ThenInclude(p => p.User)
-            .Include(x => x.DroneCandidates).ThenInclude(d => d.Drone)
+            .Include(x => x.PersonnelCandidates).ThenInclude(p => p.User)!.ThenInclude(u => u.UserRoles)!.ThenInclude(ur => ur.Role)
+            .Include(x => x.DroneCandidates).ThenInclude(d => d.Drone)!.ThenInclude(u => u.TechnicalInspections)
             .Include(x => x.Region)
             .SingleOrDefaultAsync(x => x.Id == id, ct)
             ?? throw new NotFoundException("PreMissionAssessment", id);
@@ -255,25 +256,26 @@ public sealed class PreMissionAssessmentService
             .Where(x => x.IsEmailVerified && (x.Status == "Active" || x.Status == "Enabled"))
             .ToListAsync(ct);
 
-        var inspectorUsers = activeUsers
-            .Where(x => x.UserRoles.Any(r => r.Role != null && r.Role.RoleName == UserRoles.Inspector))
+        var operationalRoles = new[] { UserRoles.Inspector, UserRoles.Analyst, "Technician", UserRoles.MaintenanceTechnician, "Pilot" };
+        var candidateUsers = activeUsers
+            .Where(x => x.UserRoles.Any(r => r.Role != null && operationalRoles.Contains(r.Role.RoleName, StringComparer.OrdinalIgnoreCase)))
             .ToList();
 
-        var inspectorUserIds = inspectorUsers.Select(u => u.Id).ToList();
+        var candidateUserIds = candidateUsers.Select(u => u.Id).ToList();
 
         var userScopes = await _db.UserGeographicScopes
-            .Where(s => inspectorUserIds.Contains(s.UserId))
+            .Where(s => candidateUserIds.Contains(s.UserId))
             .ToListAsync(ct);
 
         var userBookings = await _db.ResourceBookings
             .Where(b => b.UserId.HasValue &&
-                        inspectorUserIds.Contains(b.UserId.Value) &&
+                        candidateUserIds.Contains(b.UserId.Value) &&
                         b.Status == ResourceBookingStatus.Active &&
                         b.StartAt < assessment.PlannedEnd &&
                         b.EndAt > assessment.PlannedStart)
             .ToListAsync(ct);
 
-        foreach (var user in inspectorUsers)
+        foreach (var user in candidateUsers)
         {
             var candidate = PersonnelEligibilityPolicy.EvaluatePersonnel(
                 user,
@@ -286,6 +288,7 @@ public sealed class PreMissionAssessmentService
 
             candidate.Assessment = assessment;
             candidate.AssessmentId = assessment.Id;
+            candidate.User = user;
             _db.PreMissionAssessmentPersonnel.Add(candidate);
         }
 
@@ -334,6 +337,7 @@ public sealed class PreMissionAssessmentService
             {
                 Assessment = assessment,
                 AssessmentId = assessment.Id,
+                Drone = drone,
                 DroneId = drone.Id,
                 IsEligible = isEligible,
                 OperationalAvailabilityStatus = isOpAvailable
@@ -353,7 +357,10 @@ public sealed class PreMissionAssessmentService
 
         // Step 5: Overall Status Calculation
         var isSiteFeasible = siteResult.Status == ReadinessCheckStatus.Passed;
-        var hasEligiblePersonnel = assessment.PersonnelCandidates.Any(x => x.IsEligible);
+        var hasEligibleInspector = assessment.PersonnelCandidates.Any(x => x.IsEligible && (x.Role.Contains("Inspector", StringComparison.OrdinalIgnoreCase) || x.Role.Contains("Pilot", StringComparison.OrdinalIgnoreCase)));
+        var hasEligibleAnalyst = assessment.PersonnelCandidates.Any(x => x.IsEligible && x.Role.Contains("Analyst", StringComparison.OrdinalIgnoreCase));
+        var hasEligibleTechnician = assessment.PersonnelCandidates.Any(x => x.IsEligible && (x.Role.Contains("Tech", StringComparison.OrdinalIgnoreCase) || x.Role.Contains("Maintenance", StringComparison.OrdinalIgnoreCase)));
+        var hasEligiblePersonnel = hasEligibleInspector && hasEligibleAnalyst && hasEligibleTechnician;
         var hasEligibleDrone = assessment.DroneCandidates.Any(x => x.IsEligible);
 
         var isReady = isSiteFeasible && hasEligiblePersonnel && hasEligibleDrone;
@@ -366,7 +373,7 @@ public sealed class PreMissionAssessmentService
             .Where(x => x.IsEligible)
             .Select(x => x.TechnicalHealth)
             .FirstOrDefault();
-        assessment.OverallTechnicalHealth = bestDroneHealth != TechnicalHealth.Unknown ? bestDroneHealth : TechnicalHealth.Healthy;
+        assessment.OverallTechnicalHealth = bestDroneHealth != TechnicalHealth.Unknown ? bestDroneHealth : (hasEligibleDrone ? TechnicalHealth.Healthy : TechnicalHealth.Unknown);
 
         Audit(assessment.Id, "ASSESSMENT_EVALUATED");
         await SaveWithConcurrency(ct);
@@ -459,8 +466,6 @@ public sealed class PreMissionAssessmentService
             ?? throw new NotFoundException("Drone", primaryDroneId);
 
         var primaryInspectorId = request.Personnel.First().UserId;
-
-        await using var tx = _db.Database.IsRelational() ? await _db.Database.BeginTransactionAsync(ct) : null;
 
         // Gap #11: Mission starts at PendingAcceptance
         var mission = new Mission
@@ -566,7 +571,6 @@ public sealed class PreMissionAssessmentService
         }
 
         await SaveWithConcurrency(ct);
-        if (tx != null) await tx.CommitAsync(ct);
         return mission;
     }
 

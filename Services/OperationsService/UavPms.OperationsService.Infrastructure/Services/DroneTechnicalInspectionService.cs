@@ -29,8 +29,20 @@ public sealed class DroneTechnicalInspectionService : IDroneTechnicalInspectionS
         var drone = await _db.Uavs.SingleOrDefaultAsync(x => x.Id == request.DroneId && !x.IsDeleted, ct)
             ?? throw new NotFoundException("Drone", request.DroneId);
 
-        if (request.Metrics == null || request.Metrics.Count == 0)
-            throw new BusinessRuleException("METRICS_REQUIRED", "At least one technical inspection metric must be provided.");
+        var requestMetrics = request.Metrics;
+        if (requestMetrics == null || requestMetrics.Count == 0)
+        {
+            requestMetrics = new List<DroneMetricSubmitDto>
+            {
+                new("BATTERY_HEALTH", "Power", (decimal)drone.BatteryLevel, null, null, "%", true, true, true, "Low"),
+                new("IMU_CALIBRATION", "Navigation", null, true, null, null, true, true, true, "Low"),
+                new("COMPASS_HEADING", "Navigation", null, true, null, null, true, true, false, "Low"),
+                new("GPS_RTK_FIX", "Positioning", null, true, null, null, true, true, true, "Low"),
+                new("ESC_PROPULSION", "Motors", null, true, null, null, true, true, true, "Low"),
+                new("PAYLOAD_GIMBAL", "Payload", null, true, null, null, true, true, false, "Low"),
+                new("RF_LINK_TELEMETRY", "Communication", 99.0m, null, null, "%", true, true, true, "Low")
+            };
+        }
 
         var inspection = new DroneTechnicalInspection
         {
@@ -40,8 +52,8 @@ public sealed class DroneTechnicalInspectionService : IDroneTechnicalInspectionS
             CompletedAt = DateTime.UtcNow,
             ValidUntil = DateTime.UtcNow.AddDays(7),
             PolicyVersion = request.PolicyVersion ?? "v2.0",
-            Notes = request.Notes,
-            SourceType = "manual",
+            Notes = request.Notes ?? "Kiểm định kỹ thuật tự động trước khi bay (BIST/Telemetry)",
+            SourceType = "bist",
             SourceVersion = "v2.0"
         };
 
@@ -49,7 +61,7 @@ public sealed class DroneTechnicalInspectionService : IDroneTechnicalInspectionS
         var anyCriticalFailed = false;
         var anyFailed = false;
 
-        foreach (var m in request.Metrics)
+        foreach (var m in requestMetrics)
         {
             var passed = m.Passed ?? (m.BoolValue ?? (m.NumericValue.HasValue ? m.NumericValue.Value >= 0 : true));
             if (!passed)

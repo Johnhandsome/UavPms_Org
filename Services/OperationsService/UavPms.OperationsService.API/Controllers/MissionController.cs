@@ -39,24 +39,32 @@ public class MissionController : ControllerBase
     {
         if (request.RegionId.HasValue)
         {
-            if (!Enum.TryParse<MissionType>((request.MissionType ?? "").Replace("_", ""), true, out var missionType))
-                return BadRequest(new ApiResponse(false, "MissionType must be SCHEDULED or AD_HOC"));
+            var assessmentId = request.AssessmentId ?? request.SourceAssessmentId;
+            var isExplicitAdHoc = string.Equals(request.MissionType, "AD_HOC", StringComparison.OrdinalIgnoreCase) ||
+                                  string.Equals(request.MissionType, "AdHoc", StringComparison.OrdinalIgnoreCase);
+
+            var missionType = (isExplicitAdHoc || request.ScheduleId is null || assessmentId is not null)
+                ? MissionType.AdHoc
+                : MissionType.Scheduled;
+
             if (!request.PlannedStart.HasValue || !request.PlannedEnd.HasValue)
                 return BadRequest(new ApiResponse(false, "PlannedStart and PlannedEnd are required"));
+
             var mission = await _lifecycle!.CreateAsync(new Mf01CreateMission(
                 request.Title ?? request.Name ?? "",
                 request.RegionId.Value,
                 missionType,
                 request.ScheduleId,
                 request.TriggerReason,
-                request.PlannedStart.Value,
-                request.PlannedEnd.Value,
+                ToUtc(request.PlannedStart.Value),
+                ToUtc(request.PlannedEnd.Value),
                 request.Description,
-                request.ConfirmationDeadline,
+                request.ConfirmationDeadline.HasValue ? ToUtc(request.ConfirmationDeadline.Value) : null,
                 request.ManagerInstructions,
                 request.AssignedToUserId ?? request.InspectorId,
                 request.DroneId ?? request.UavId,
-                request.Assignments), cancellationToken);
+                request.Assignments,
+                assessmentId), cancellationToken);
             return Ok(new ApiResponse(true, "Mission created successfully", mission.Id));
         }
         var command = new CreateMissionCommand(
@@ -101,6 +109,7 @@ public class MissionController : ControllerBase
     public async Task<IActionResult> RemoveAssignment(Guid id, Guid assignmentId, CancellationToken ct) { await _lifecycle!.RemoveAssignmentAsync(id, assignmentId, ct); return Ok(new ApiResponse(true, "Mission assignment removed")); }
 
     [HttpPut("{id:guid}/drone")]
+    [HttpPost("{id:guid}/drone")]
     [Authorize(Roles = UserRoles.AdminAndManager)]
     public async Task<IActionResult> AssignDrone(Guid id, [FromBody] MissionDroneRequest request, CancellationToken ct) { await _lifecycle!.AssignDroneAsync(id, request.DroneId, ct); return Ok(new ApiResponse(true, "Mission drone assigned")); }
 
@@ -331,6 +340,9 @@ public class MissionController : ControllerBase
         var result = await _mediator.Send(new GetMyMissionsQuery(), cancellationToken);
         return Ok(new ApiResponse(true, "Missions retrieved successfully", result));
     }
+
+    private static DateTime ToUtc(DateTime dt) =>
+        dt.Kind == DateTimeKind.Utc ? dt : DateTime.SpecifyKind(dt, DateTimeKind.Utc);
 }
 
 public record CreateMissionRequest(
@@ -355,7 +367,9 @@ public record CreateMissionRequest(
     DateTime? PlannedEnd = null,
     DateTime? ConfirmationDeadline = null,
     string? ManagerInstructions = null,
-    IReadOnlyList<MissionAssignmentItemRequest>? Assignments = null);
+    IReadOnlyList<MissionAssignmentItemRequest>? Assignments = null,
+    Guid? AssessmentId = null,
+    Guid? SourceAssessmentId = null);
 
 public record MissionScopeRequest(string BoundaryWkt);
 public record MissionAssetsRequest(string BoundaryWkt, IReadOnlyCollection<Guid> AssetIds);

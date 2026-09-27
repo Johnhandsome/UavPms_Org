@@ -30,7 +30,7 @@ public class ListMissionsQueryHandler : IRequestHandler<ListMissionsQuery, Pagin
             MissionCode = mission.MissionCode,
             Title = mission.Title,
             RouteData = string.Empty,
-            AssignedToUserId = mission.InspectorId,
+            AssignedToUserId = mission.InspectorId ?? Guid.Empty,
             AssignedToEmail = mission.Inspector?.Email ?? string.Empty,
             DroneCode = string.Empty,
             InspectorId = mission.InspectorId,

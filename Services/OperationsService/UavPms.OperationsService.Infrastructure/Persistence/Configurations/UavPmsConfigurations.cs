@@ -229,10 +229,12 @@ public class MissionConfiguration : IEntityTypeConfiguration<Mission>
         builder.HasOne(e => e.Inspector)
             .WithMany()
             .HasForeignKey(e => e.InspectorId)
+            .IsRequired(false)
             .OnDelete(DeleteBehavior.Restrict);
         builder.HasOne(e => e.Uav)
             .WithMany(u => u.Missions)
             .HasForeignKey(e => e.UavId)
+            .IsRequired(false)
             .OnDelete(DeleteBehavior.Restrict);
         builder.HasOne(e => e.Region).WithMany().HasForeignKey(e => e.RegionId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne(e => e.Schedule).WithMany().HasForeignKey(e => e.ScheduleId).OnDelete(DeleteBehavior.Restrict);

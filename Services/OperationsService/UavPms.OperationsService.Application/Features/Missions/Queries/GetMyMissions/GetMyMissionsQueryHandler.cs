@@ -34,7 +34,7 @@ public class GetMyMissionsQueryHandler : IRequestHandler<GetMyMissionsQuery, Lis
             MissionCode = mission.MissionCode,
             Title = mission.Title,
             RouteData = mission.RouteData ?? string.Empty,
-            AssignedToUserId = mission.AssignedToUserId != Guid.Empty ? mission.AssignedToUserId : (mission.InspectorId != Guid.Empty ? mission.InspectorId : currentUserId),
+            AssignedToUserId = mission.AssignedToUserId != Guid.Empty ? mission.AssignedToUserId : ((mission.InspectorId.HasValue && mission.InspectorId.Value != Guid.Empty) ? mission.InspectorId.Value : currentUserId),
             AssignedToEmail = mission.Inspector?.Email ?? mission.AssignedToUser?.Email ?? string.Empty,
             AssignedToUsername = !string.IsNullOrWhiteSpace(mission.Inspector?.FullName) ? mission.Inspector.FullName : (mission.AssignedToUser?.FullName ?? mission.Inspector?.Email ?? string.Empty),
             DroneId = mission.UavId != Guid.Empty ? mission.UavId : (Guid?)null,
