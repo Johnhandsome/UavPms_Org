@@ -78,10 +78,10 @@ public class MissionRepository : GenericRepository<Mission>, IMissionRepository
         return await _context.Missions
             .Include(m => m.Inspector)
             .Include(m => m.Manager)
-            .Include(m => m.AssignedToUser)
             .Include(m => m.Uav)
+            .Include(m => m.Region)
             .Include(m => m.Assignments).ThenInclude(a => a.User)
-            .Where(m => m.InspectorId == userId || m.AssignedToUserId == userId || m.Assignments.Any(a => a.UserId == userId))
+            .Where(m => (m.InspectorId.HasValue && m.InspectorId.Value == userId) || m.Assignments.Any(a => a.UserId == userId) || m.ManagerId == userId)
             .OrderByDescending(m => m.CreatedAt)
             .ToListAsync();
     }
@@ -110,7 +110,7 @@ public class MissionRepository : GenericRepository<Mission>, IMissionRepository
     {
         if (global) return Task.FromResult(true);
         return _context.Missions.AnyAsync(m => m.Id == missionId &&
-            (m.ManagerId == userId || m.Assignments.Any(a => a.UserId == userId && a.Status == MissionAssignmentStatus.Active)
+            (m.ManagerId == userId || (m.InspectorId.HasValue && m.InspectorId.Value == userId) || m.Assignments.Any(a => a.UserId == userId && a.Status == MissionAssignmentStatus.Active)
              || _context.UserGeographicScopes.Any(s => s.UserId == userId && s.RegionId == m.RegionId)), cancellationToken);
     }
 }
