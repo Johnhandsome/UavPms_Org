@@ -92,7 +92,7 @@ public class MissionController : ControllerBase
     public async Task<IActionResult> ConfirmAssets(Guid id, [FromBody] MissionAssetsRequest request, CancellationToken ct) { await _lifecycle!.ConfirmAssetsAsync(id, request.BoundaryWkt, request.AssetIds, ct); return Ok(new ApiResponse(true, "Mission assets confirmed")); }
 
     [HttpGet("{id:guid}/assignments")]
-    [Authorize(Roles = UserRoles.AdminManagerInspectorAnalyst)]
+    [Authorize(Roles = UserRoles.AllAuthenticatedRoles)]
     public async Task<IActionResult> GetAssignments(Guid id, CancellationToken ct)
     {
         if (_lifecycle == null) return BadRequest(new ApiResponse(false, "Lifecycle service unavailable"));
@@ -114,15 +114,15 @@ public class MissionController : ControllerBase
     public async Task<IActionResult> AssignDrone(Guid id, [FromBody] MissionDroneRequest request, CancellationToken ct) { await _lifecycle!.AssignDroneAsync(id, request.DroneId, ct); return Ok(new ApiResponse(true, "Mission drone assigned")); }
 
     [HttpPost("{id:guid}/drone-handover")]
-    [Authorize(Roles = UserRoles.AdminManagerInspector)]
+    [Authorize(Roles = UserRoles.AllAuthenticatedRoles)]
     public async Task<IActionResult> Handover(Guid id, [FromBody] MissionHandoverRequest request, CancellationToken ct) => Ok(new ApiResponse(true, "Drone handover confirmed", await _lifecycle!.ConfirmHandoverAsync(id, new Mf01Handover(request.DroneId, request.ReceivedBy, request.Condition, request.Accepted), ct)));
 
     [HttpPost("{id:guid}/check-in")]
-    [Authorize(Roles = UserRoles.AdminManagerInspector)]
+    [Authorize(Roles = UserRoles.AllAuthenticatedRoles)]
     public async Task<IActionResult> CheckIn(Guid id, CancellationToken ct) => Ok(new ApiResponse(true, "Checked in", await _lifecycle!.CheckInAsync(id, ct)));
 
     [HttpPost("{id:guid}/assignments/accept")]
-    [Authorize(Roles = UserRoles.AdminManagerInspector)]
+    [Authorize(Roles = UserRoles.AllAuthenticatedRoles)]
     public async Task<IActionResult> AcceptAssignment(Guid id, CancellationToken ct)
     {
         if (_lifecycle == null) return BadRequest(new ApiResponse(false, "Lifecycle service unavailable"));
@@ -131,7 +131,7 @@ public class MissionController : ControllerBase
     }
 
     [HttpPost("{id:guid}/assignments/postpone")]
-    [Authorize(Roles = UserRoles.AdminManagerInspector)]
+    [Authorize(Roles = UserRoles.AllAuthenticatedRoles)]
     public async Task<IActionResult> PostponeAssignment(Guid id, [FromBody] PostponeAssignmentRequest request, CancellationToken ct)
     {
         if (_lifecycle == null) return BadRequest(new ApiResponse(false, "Lifecycle service unavailable"));
@@ -209,7 +209,7 @@ public class MissionController : ControllerBase
     }
 
     [HttpGet("{id:guid}/communications")]
-    [Authorize(Roles = UserRoles.AdminManagerInspectorAnalyst)]
+    [Authorize(Roles = UserRoles.AllAuthenticatedRoles)]
     public async Task<IActionResult> GetCommunications(Guid id, CancellationToken ct)
     {
         if (_lifecycle == null) return BadRequest(new ApiResponse(false, "Lifecycle service unavailable"));
@@ -218,7 +218,7 @@ public class MissionController : ControllerBase
     }
 
     [HttpGet("{id:guid}/activities")]
-    [Authorize(Roles = UserRoles.AdminManagerInspectorAnalyst)]
+    [Authorize(Roles = UserRoles.AllAuthenticatedRoles)]
     public async Task<IActionResult> GetActivities(Guid id, CancellationToken ct)
     {
         if (_lifecycle == null) return BadRequest(new ApiResponse(false, "Lifecycle service unavailable"));
@@ -227,7 +227,7 @@ public class MissionController : ControllerBase
     }
 
     [HttpPost("{id:guid}/activities")]
-    [Authorize(Roles = UserRoles.AdminManagerInspectorAnalyst)]
+    [Authorize(Roles = UserRoles.AllAuthenticatedRoles)]
     public async Task<IActionResult> AddActivity(
         Guid id,
         [FromBody] CreateMissionActivityRequest request,
@@ -239,7 +239,7 @@ public class MissionController : ControllerBase
     }
 
     [HttpGet("{id:guid}/detections")]
-    [Authorize(Roles = UserRoles.AdminManagerInspectorAnalyst)]
+    [Authorize(Roles = UserRoles.AllAuthenticatedRoles)]
     public async Task<IActionResult> GetDetections(
         Guid id,
         [FromQuery] string? status = null,
@@ -254,7 +254,7 @@ public class MissionController : ControllerBase
 
     [HttpPost("{missionId:guid}/detections/{detectionId:guid}/review")]
     [HttpPut("{missionId:guid}/detections/{detectionId:guid}/review")]
-    [Authorize(Roles = UserRoles.ManagerAndInspector + "," + UserRoles.Analyst)]
+    [Authorize(Roles = UserRoles.AllAuthenticatedRoles)]
     public async Task<IActionResult> ReviewDetection(
         Guid missionId,
         Guid detectionId,
@@ -267,7 +267,7 @@ public class MissionController : ControllerBase
     }
 
     [HttpGet("{id:guid}/maintenance-tasks")]
-    [Authorize(Roles = UserRoles.AdminManagerInspectorAnalyst)]
+    [Authorize(Roles = UserRoles.AllAuthenticatedRoles)]
     public async Task<IActionResult> GetMaintenanceTasks(Guid id, CancellationToken ct = default)
     {
         if (_lifecycle == null) return BadRequest(new ApiResponse(false, "Lifecycle service unavailable"));
@@ -326,7 +326,7 @@ public class MissionController : ControllerBase
     }
 
     [HttpGet("{id:guid}")]
-    [Authorize(Roles = UserRoles.AdminManagerInspectorAnalyst)]
+    [Authorize(Roles = UserRoles.AllAuthenticatedRoles)]
     public async Task<IActionResult> Get(Guid id, CancellationToken cancellationToken = default)
     {
         var result = await _mediator.Send(new GetMissionDetailsQuery(id), cancellationToken);

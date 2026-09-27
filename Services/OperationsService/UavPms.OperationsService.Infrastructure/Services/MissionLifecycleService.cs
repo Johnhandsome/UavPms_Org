@@ -1558,7 +1558,7 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
         var global = IsGlobal;
         var uid = _current.UserId;
         var isAnalyst = _current.Roles.Contains(UserRoles.Analyst, StringComparer.OrdinalIgnoreCase);
-        var m = await MissionQuery(graph).SingleOrDefaultAsync(x => x.Id == id && (global || isAnalyst || x.ManagerId == uid || x.Assignments.Any(a => a.UserId == uid && a.Status == MissionAssignmentStatus.Active)), ct);
+        var m = await MissionQuery(graph).SingleOrDefaultAsync(x => x.Id == id && (global || isAnalyst || x.ManagerId == uid || (x.InspectorId.HasValue && x.InspectorId.Value == uid) || x.Assignments.Any(a => a.UserId == uid && a.Status == MissionAssignmentStatus.Active)), ct);
         return m ?? throw new ForbiddenException("MISSION_ACCESS_DENIED");
     }
     private IQueryable<Mission> MissionQuery(bool graph) { var q = _db.Missions.Include(x => x.Assignments).AsQueryable(); return graph ? q.Include(x => x.CheckIns).Include(x => x.DroneHandovers).Include(x => x.MissionTargets) : q; }
