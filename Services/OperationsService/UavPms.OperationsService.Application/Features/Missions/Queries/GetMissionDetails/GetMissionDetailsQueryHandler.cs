@@ -55,7 +55,7 @@ public class GetMissionDetailsQueryHandler : IRequestHandler<GetMissionDetailsQu
             ActualCompleted = mission.EndedAt,
             BoundaryWkt = mission.Boundary?.AsText(),
             Team = mission.Assignments.Select(a => new MissionAssignmentDto(a.Id, a.UserId, a.User?.FullName ?? "", a.AssignmentRole,
-                a.Status.ToString(), mission.CheckIns.Where(c => c.UserId == a.UserId && c.Status == MissionCheckInStatus.CheckedIn).Select(c => (DateTime?)c.CheckedInAt).FirstOrDefault())).ToList(),
+                a.Status.ToString(), a.ResponseStatus.ToString(), mission.CheckIns.Where(c => c.UserId == a.UserId && c.Status == MissionCheckInStatus.CheckedIn).Select(c => (DateTime?)c.CheckedInAt).FirstOrDefault())).ToList(),
             Status = mission.Status.ToString(),
             Description = mission.Description,
             ManagerId = mission.ManagerId,

@@ -38,7 +38,7 @@ public class MissionDto
     public DateTime? UpdatedAt { get; set; }
 }
 
-public record MissionAssignmentDto(Guid Id, Guid UserId, string UserName, string AssignmentRole, string Status, DateTime? CheckedInAt);
+public record MissionAssignmentDto(Guid Id, Guid UserId, string UserName, string AssignmentRole, string Status, string ResponseStatus, DateTime? CheckedInAt);
 
 public class MissionTargetDto
 {

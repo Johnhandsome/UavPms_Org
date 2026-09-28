@@ -58,6 +58,7 @@ public class GetMyMissionsQueryHandler : IRequestHandler<GetMyMissionsQuery, Lis
                 a.User?.FullName ?? a.User?.Email ?? string.Empty,
                 a.AssignmentRole,
                 a.Status.ToString(),
+                a.ResponseStatus.ToString(),
                 null)).ToList(),
             Status = mission.Status.ToString(),
             Description = mission.Description,
