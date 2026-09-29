@@ -64,7 +64,12 @@ public class MissionController : ControllerBase
                 request.AssignedToUserId ?? request.InspectorId,
                 request.DroneId ?? request.UavId,
                 request.Assignments,
-                assessmentId), cancellationToken);
+                assessmentId,
+                request.Priority,
+                request.Objective,
+                request.PriorityDefects,
+                request.EmergencyReason,
+                request.IsImmediate), cancellationToken);
             return Ok(new ApiResponse(true, "Mission created successfully", mission.Id));
         }
         var command = new CreateMissionCommand(
@@ -77,7 +82,12 @@ public class MissionController : ControllerBase
             request.ScheduledStartAt ?? request.ScheduledAt,
             request.InspectorId,
             request.UavId ?? request.DroneId,
-            request.TargetAssetIds);
+            request.TargetAssetIds,
+            request.Priority,
+            request.Objective,
+            request.PriorityDefects,
+            request.EmergencyReason,
+            request.IsImmediate);
         var result = await _mediator.Send(command, cancellationToken);
         return Ok(new ApiResponse(true, "Mission created successfully", result));
     }
@@ -306,6 +316,7 @@ public class MissionController : ControllerBase
         [FromQuery] int pageSize = 10,
         [FromQuery] string? search = null,
         [FromQuery] string? status = null,
+        [FromQuery] string? priority = null,
         [FromQuery] string? sortBy = "createdAt",
         [FromQuery] bool sortDescending = true,
         CancellationToken cancellationToken = default)
@@ -320,7 +331,7 @@ public class MissionController : ControllerBase
             return BadRequest(new ApiResponse(false, "Invalid page or page size"));
         }
         
-        var query = new ListMissionsQuery(page, pageSize, search, status, sortBy, sortDescending);
+        var query = new ListMissionsQuery(page, pageSize, search, status, sortBy, sortDescending, priority);
         var result = await _mediator.Send(query, cancellationToken);
         return Ok(new ApiResponse(true, "Mission list retrieved successfully", result));
     }
@@ -369,7 +380,12 @@ public record CreateMissionRequest(
     string? ManagerInstructions = null,
     IReadOnlyList<MissionAssignmentItemRequest>? Assignments = null,
     Guid? AssessmentId = null,
-    Guid? SourceAssessmentId = null);
+    Guid? SourceAssessmentId = null,
+    MissionPriority Priority = MissionPriority.Normal,
+    InspectionObjective Objective = InspectionObjective.PeriodicInspection,
+    IReadOnlyList<string>? PriorityDefects = null,
+    string? EmergencyReason = null,
+    bool IsImmediate = false);
 
 public record MissionScopeRequest(string BoundaryWkt);
 public record MissionAssetsRequest(string BoundaryWkt, IReadOnlyCollection<Guid> AssetIds);

@@ -461,23 +461,43 @@ public sealed class PreMissionAssessmentService
                 throw new BusinessRuleException("RESOURCE_NOT_IN_ASSESSMENT", $"Drone {droneId} is not an eligible candidate in assessment.");
         }
 
-        // Gap #10: Check real-time resource bookings conflict
-        var assignedUserIds = request.Personnel.Select(p => p.UserId).ToList();
-        var hasUserConflict = await _db.ResourceBookings.AnyAsync(b =>
-            b.UserId.HasValue && assignedUserIds.Contains(b.UserId.Value) &&
-            b.Status == ResourceBookingStatus.Active &&
-            b.StartAt < assessment.PlannedEnd &&
-            b.EndAt > assessment.PlannedStart, ct);
-        if (hasUserConflict)
-            throw new BusinessRuleException("RESOURCE_BOOKING_CONFLICT", "One or more assigned personnel have a conflicting schedule.");
+        if (request.Priority == MissionPriority.Emergency)
+        {
+            if (string.IsNullOrWhiteSpace(request.EmergencyReason) || request.EmergencyReason.Trim().Length < 10)
+            {
+                throw new BusinessRuleException("EMERGENCY_REASON_REQUIRED", "EmergencyReason is required (min 10 characters) when Priority is EMERGENCY.");
+            }
+        }
 
-        var hasDroneConflict = await _db.ResourceBookings.AnyAsync(b =>
-            b.DroneId.HasValue && request.DroneIds.Contains(b.DroneId.Value) &&
-            b.Status == ResourceBookingStatus.Active &&
-            b.StartAt < assessment.PlannedEnd &&
-            b.EndAt > assessment.PlannedStart, ct);
-        if (hasDroneConflict)
-            throw new BusinessRuleException("RESOURCE_BOOKING_CONFLICT", "One or more assigned drones have a conflicting schedule.");
+        // Gap #10: Check real-time resource bookings conflict (BR-04, BR-07)
+        var assignedUserIds = request.Personnel.Select(p => p.UserId).ToList();
+        var conflictingUserBookings = await _db.ResourceBookings
+            .Include(b => b.Mission)
+            .Where(b => b.UserId.HasValue && assignedUserIds.Contains(b.UserId.Value) &&
+                        b.Status == ResourceBookingStatus.Active &&
+                        b.StartAt < assessment.PlannedEnd &&
+                        b.EndAt > assessment.PlannedStart)
+            .ToListAsync(ct);
+        if (conflictingUserBookings.Count > 0)
+        {
+            var conflictDetails = string.Join("; ", conflictingUserBookings.Select(b =>
+                $"Pilot {b.UserId} is scheduled for mission {b.Mission?.MissionCode ?? b.MissionId.ToString()} ({b.StartAt:yyyy-MM-dd HH:mm} - {b.EndAt:yyyy-MM-dd HH:mm})"));
+            throw new BusinessRuleException("RESOURCE_BOOKING_CONFLICT", $"One or more assigned personnel have a conflicting schedule. {conflictDetails}");
+        }
+
+        var conflictingDroneBookings = await _db.ResourceBookings
+            .Include(b => b.Mission)
+            .Where(b => b.DroneId.HasValue && request.DroneIds.Contains(b.DroneId.Value) &&
+                        b.Status == ResourceBookingStatus.Active &&
+                        b.StartAt < assessment.PlannedEnd &&
+                        b.EndAt > assessment.PlannedStart)
+            .ToListAsync(ct);
+        if (conflictingDroneBookings.Count > 0)
+        {
+            var conflictDetails = string.Join("; ", conflictingDroneBookings.Select(b =>
+                $"Drone {b.DroneId} is scheduled for mission {b.Mission?.MissionCode ?? b.MissionId.ToString()} ({b.StartAt:yyyy-MM-dd HH:mm} - {b.EndAt:yyyy-MM-dd HH:mm})"));
+            throw new BusinessRuleException("RESOURCE_BOOKING_CONFLICT", $"One or more assigned drones have a conflicting schedule. {conflictDetails}");
+        }
 
         var primaryDroneId = request.DroneIds.First();
         var primaryDrone = await _db.Uavs.SingleOrDefaultAsync(x => x.Id == primaryDroneId, ct)
@@ -500,6 +520,11 @@ public sealed class PreMissionAssessmentService
             PlannedStart = assessment.PlannedStart,
             PlannedEnd = assessment.PlannedEnd,
             ScheduledStartAt = assessment.PlannedStart,
+            Priority = request.Priority,
+            Objective = request.Objective,
+            PriorityDefectsJson = JsonSerializer.Serialize(request.PriorityDefects ?? (IEnumerable<string>)Array.Empty<string>()),
+            EmergencyReason = request.EmergencyReason,
+            IsImmediate = request.IsImmediate,
             Status = MissionStatus.PendingAcceptance,
             PreMissionAssessmentId = assessment.Id,
             Boundary = assessment.ProposedBoundary,
@@ -582,7 +607,14 @@ public sealed class PreMissionAssessmentService
         });
 
         // Audit & Notification
-        Audit(mission.Id, "MISSION_CREATED_FROM_ASSESSMENT");
+        Audit(mission.Id, "MISSION_CREATED_FROM_ASSESSMENT", "{}", JsonSerializer.Serialize(new
+        {
+            Priority = mission.Priority.ToString(),
+            Objective = mission.Objective.ToString(),
+            PriorityDefects = request.PriorityDefects,
+            EmergencyReason = mission.EmergencyReason,
+            IsImmediate = mission.IsImmediate
+        }), "Missions");
         foreach (var p in request.Personnel)
         {
             Notify(p.UserId, mission, "MISSION_DISPATCH", p.Role);
@@ -655,15 +687,15 @@ public sealed class PreMissionAssessmentService
             throw new ForbiddenException("ACTIVE_USER_REQUIRED");
     }
 
-    private void Audit(Guid id, string action) =>
+    private void Audit(Guid id, string action, string oldValues = "{}", string newValues = "{}", string tableName = "PreMissionAssessments") =>
         _db.AuditLogs.Add(new AuditLog
         {
             UserId = _current.UserId,
-            TableName = "PreMissionAssessments",
+            TableName = tableName,
             RecordId = id,
             ActionType = action,
-            OldValues = "{}",
-            NewValues = "{}",
+            OldValues = oldValues,
+            NewValues = newValues,
             IpAddress = _current.IpAddress ?? "",
             UserAgent = _current.UserAgent ?? ""
         });

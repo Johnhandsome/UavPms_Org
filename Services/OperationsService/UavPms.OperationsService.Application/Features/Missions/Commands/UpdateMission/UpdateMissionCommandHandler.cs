@@ -63,6 +63,13 @@ public class UpdateMissionCommandHandler : IRequestHandler<UpdateMissionCommand,
             Description = misison.Description,
             ManagerId = misison.ManagerId,
             ManagerEmail = manager?.Email ?? string.Empty,
+            Priority = misison.Priority.ToString(),
+            Objective = misison.Objective.ToString(),
+            PriorityDefects = !string.IsNullOrWhiteSpace(misison.PriorityDefectsJson)
+                ? System.Text.Json.JsonSerializer.Deserialize<List<string>>(misison.PriorityDefectsJson) ?? new List<string>()
+                : new List<string>(),
+            EmergencyReason = misison.EmergencyReason,
+            IsImmediate = misison.IsImmediate,
             CreatedAt = misison.CreatedAt,
             UpdatedAt = misison.UpdatedAt
         };

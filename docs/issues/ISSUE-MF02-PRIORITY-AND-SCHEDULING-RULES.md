@@ -1,6 +1,6 @@
 # [ISSUE-MF02-002] Mở Rộng MF02 – Mức Độ Ưu Tiên Nhiệm Vụ & Quy Tắc Lập Lịch Bay (Mission Priority & Scheduling Rules)
 
-- **Trạng thái**: Đang triển khai (In Progress)
+- **Trạng thái**: Đã giải quyết (Resolved)
 - **Mức độ ưu tiên**: 🔴 Cao (P1 / High - Quy định thứ tự điều phối và an toàn bay)
 - **Phân hệ**: OperationsService / ApiGateway
 - **Tác giả / Người phụ trách**: Johnhandsome
@@ -242,11 +242,11 @@ Khi vi phạm quy tắc xung đột (BR-04, BR-07), Backend trả về mã trạ
 
 ## 6. Kế Hoạch Thực Hiện & Theo Dõi (Execution Plan Checklist)
 
-- [ ] **Bước 1**: Tạo file tài liệu Issue chuẩn hóa và commit vào Git repository.
-- [ ] **Bước 2**: Định nghĩa Enums nghiệp vụ và cập nhật thuộc tính Entity `Mission`.
-- [ ] **Bước 3**: Cập nhật DbContext, Fluent API Configuration và sinh EF Core Migration.
-- [ ] **Bước 4**: Cập nhật DTOs (`CreateMissionRequest`, `MissionDto`, `ResourceConflictDto`) và Validation rules.
-- [ ] **Bước 5**: Nâng cấp `PreMissionAssessmentService` và `MissionLifecycleService` với logic Revalidation và Conflict Visibility.
-- [ ] **Bước 6**: Nâng cấp `MissionRepository.ApplySorting` hỗ trợ sắp xếp đa cấp theo Priority.
-- [ ] **Bước 7**: Viết bộ Unit Test kiểm thử toàn diện các quy tắc BR-01 đến BR-10.
-- [ ] **Bước 8**: Chạy `dotnet test` nghiệm thu và push commit lên nhánh `origin/main`.
+- [x] **Bước 1**: Tạo file tài liệu Issue chuẩn hóa và commit vào Git repository.
+- [x] **Bước 2**: Định nghĩa Enums nghiệp vụ và cập nhật thuộc tính Entity `Mission`.
+- [x] **Bước 3**: Cập nhật DbContext, Fluent API Configuration và sinh EF Core Migration.
+- [x] **Bước 4**: Cập nhật DTOs (`CreateMissionRequest`, `MissionDto`, `ResourceConflictDto`) và Validation rules.
+- [x] **Bước 5**: Nâng cấp `PreMissionAssessmentService` và `MissionLifecycleService` với logic Revalidation và Conflict Visibility.
+- [x] **Bước 6**: Nâng cấp `MissionRepository.ApplySorting` hỗ trợ sắp xếp đa cấp theo Priority.
+- [x] **Bước 7**: Viết bộ Unit Test kiểm thử toàn diện các quy tắc BR-01 đến BR-10.
+- [x] **Bước 8**: Chạy `dotnet test` nghiệm thu và push commit lên nhánh `origin/main`.

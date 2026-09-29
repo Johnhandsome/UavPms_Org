@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using NetTopologySuite.Geometries;
 using NetTopologySuite.IO;
@@ -149,6 +150,51 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
         }
         else if (request.ScheduleId is not null) throw new BusinessRuleException("AD_HOC_SCHEDULE_NOT_ALLOWED");
 
+        if (request.Priority == MissionPriority.Emergency)
+        {
+            if (string.IsNullOrWhiteSpace(request.EmergencyReason) || request.EmergencyReason.Trim().Length < 10)
+            {
+                throw new BusinessRuleException("EMERGENCY_REASON_REQUIRED", "EmergencyReason is required (min 10 characters) when Priority is EMERGENCY.");
+            }
+        }
+
+        // Revalidate resource schedule conflicts (BR-04, BR-07)
+        if (resolvedDroneId.HasValue)
+        {
+            var droneConflict = await _db.ResourceBookings
+                .Include(b => b.Mission)
+                .Where(b => b.DroneId == resolvedDroneId.Value &&
+                            b.Status == ResourceBookingStatus.Active &&
+                            b.StartAt < request.PlannedEnd &&
+                            b.EndAt > request.PlannedStart)
+                .FirstOrDefaultAsync(ct);
+            if (droneConflict != null)
+            {
+                throw new BusinessRuleException("RESOURCE_BOOKING_CONFLICT",
+                    $"Drone {resolvedDroneId.Value} is already booked in mission '{droneConflict.Mission?.MissionCode ?? droneConflict.MissionId.ToString()}' ({droneConflict.StartAt:yyyy-MM-dd HH:mm} - {droneConflict.EndAt:yyyy-MM-dd HH:mm}).");
+            }
+        }
+
+        var allAssignedUserIds = new HashSet<Guid>();
+        if (resolvedAssignedUserId.HasValue) allAssignedUserIds.Add(resolvedAssignedUserId.Value);
+        foreach (var a in resolvedAssignments) allAssignedUserIds.Add(a.UserId);
+
+        if (allAssignedUserIds.Count > 0)
+        {
+            var userConflict = await _db.ResourceBookings
+                .Include(b => b.Mission)
+                .Where(b => b.UserId.HasValue && allAssignedUserIds.Contains(b.UserId.Value) &&
+                            b.Status == ResourceBookingStatus.Active &&
+                            b.StartAt < request.PlannedEnd &&
+                            b.EndAt > request.PlannedStart)
+                .FirstOrDefaultAsync(ct);
+            if (userConflict != null)
+            {
+                throw new BusinessRuleException("RESOURCE_BOOKING_CONFLICT",
+                    $"Personnel {userConflict.UserId} is already booked in mission '{userConflict.Mission?.MissionCode ?? userConflict.MissionId.ToString()}' ({userConflict.StartAt:yyyy-MM-dd HH:mm} - {userConflict.EndAt:yyyy-MM-dd HH:mm}).");
+            }
+        }
+
         var status = request.ConfirmationDeadline.HasValue ? MissionStatus.PendingAcceptance : MissionStatus.Draft;
         var mission = new Mission
         {
@@ -163,6 +209,11 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
             ScheduledStartAt = request.PlannedStart,
             Description = request.Description ?? string.Empty,
             ManagerId = _current.UserId,
+            Priority = request.Priority,
+            Objective = request.Objective,
+            PriorityDefectsJson = JsonSerializer.Serialize(request.PriorityDefects ?? (IEnumerable<string>)Array.Empty<string>()),
+            EmergencyReason = request.EmergencyReason,
+            IsImmediate = request.IsImmediate,
             Status = status,
             ConfirmationDeadline = request.ConfirmationDeadline,
             ManagerInstructions = request.ManagerInstructions,
@@ -236,7 +287,14 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
         }
 
         _db.Missions.Add(mission);
-        Audit(mission.Id, "MISSION_CREATED");
+        Audit(mission.Id, "MISSION_CREATED", "{}", JsonSerializer.Serialize(new
+        {
+            Priority = mission.Priority.ToString(),
+            Objective = mission.Objective.ToString(),
+            PriorityDefects = request.PriorityDefects,
+            EmergencyReason = mission.EmergencyReason,
+            IsImmediate = mission.IsImmediate
+        }));
 
         var assignedUserIds = mission.Assignments.Select(x => x.UserId).Distinct().ToList();
         if (mission.InspectorId.HasValue && mission.InspectorId.Value != Guid.Empty && !assignedUserIds.Contains(mission.InspectorId.Value))
@@ -1614,7 +1672,7 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
     private bool IsGlobal => _current.Roles.Contains(UserRoles.SystemAdmin, StringComparer.OrdinalIgnoreCase);
     private static bool IsActive(string status) => status.Equals("Active", StringComparison.OrdinalIgnoreCase) || status.Equals("Enabled", StringComparison.OrdinalIgnoreCase);
     private static void RequirePreExecution(Mission m) { if (m.Status is MissionStatus.InProgress or MissionStatus.Completed or MissionStatus.Cancelled) throw new BusinessRuleException("MISSION_IMMUTABLE_AFTER_START"); }
-    private void Audit(Guid id, string action) => _db.AuditLogs.Add(new AuditLog { UserId = _current.UserId, TableName = "Missions", RecordId = id, ActionType = action, OldValues = "{}", NewValues = "{}", IpAddress = _current.IpAddress ?? "", UserAgent = _current.UserAgent ?? "" });
+    private void Audit(Guid id, string action, string oldValues = "{}", string newValues = "{}") => _db.AuditLogs.Add(new AuditLog { UserId = _current.UserId, TableName = "Missions", RecordId = id, ActionType = action, OldValues = oldValues, NewValues = newValues, IpAddress = _current.IpAddress ?? "", UserAgent = _current.UserAgent ?? "" });
     private void Notify(Guid userId, Mission m, string type, string? role = null)
     {
         var roleText = !string.IsNullOrWhiteSpace(role) ? $"vai trò {role}" : "nhiệm vụ";

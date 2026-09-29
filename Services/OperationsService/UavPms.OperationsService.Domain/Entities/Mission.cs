@@ -17,6 +17,11 @@ public class Mission : BaseEntity
     public Guid? InspectorId { get; set; }
     public Guid? UavId { get; set; }
     public MissionStatus Status { get; set; } = MissionStatus.Pending;
+    public MissionPriority Priority { get; set; } = MissionPriority.Normal;
+    public InspectionObjective Objective { get; set; } = InspectionObjective.PeriodicInspection;
+    public string PriorityDefectsJson { get; set; } = "[]";
+    public string? EmergencyReason { get; set; }
+    public bool IsImmediate { get; set; } = false;
     public DateTime? ScheduledStartAt { get; set; }
     public DateTime? StartedAt { get; set; }
     public DateTime? EndedAt { get; set; }

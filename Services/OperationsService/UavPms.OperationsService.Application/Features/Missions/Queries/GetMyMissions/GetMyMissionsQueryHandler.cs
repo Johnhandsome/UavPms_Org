@@ -61,6 +61,13 @@ public class GetMyMissionsQueryHandler : IRequestHandler<GetMyMissionsQuery, Lis
                 a.ResponseStatus.ToString(),
                 null)).ToList(),
             Status = mission.Status.ToString(),
+            Priority = mission.Priority.ToString(),
+            Objective = mission.Objective.ToString(),
+            PriorityDefects = !string.IsNullOrWhiteSpace(mission.PriorityDefectsJson)
+                ? System.Text.Json.JsonSerializer.Deserialize<List<string>>(mission.PriorityDefectsJson) ?? new List<string>()
+                : new List<string>(),
+            EmergencyReason = mission.EmergencyReason,
+            IsImmediate = mission.IsImmediate,
             Description = mission.Description,
             ManagerId = mission.ManagerId != Guid.Empty ? mission.ManagerId : (Guid?)null,
             ManagerEmail = mission.Manager?.Email ?? string.Empty,

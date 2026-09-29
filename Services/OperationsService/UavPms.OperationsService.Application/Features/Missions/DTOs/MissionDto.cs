@@ -18,6 +18,11 @@ public class MissionDto
     public Guid? ScheduleId { get; set; }
     public string? ScheduleName { get; set; }
     public string MissionType { get; set; } = string.Empty;
+    public string Priority { get; set; } = "Normal";
+    public string Objective { get; set; } = "PeriodicInspection";
+    public List<string> PriorityDefects { get; set; } = new();
+    public string? EmergencyReason { get; set; }
+    public bool IsImmediate { get; set; } = false;
     public string? TriggerReason { get; set; }
     public DateTime? PlannedStart { get; set; }
     public DateTime? PlannedEnd { get; set; }

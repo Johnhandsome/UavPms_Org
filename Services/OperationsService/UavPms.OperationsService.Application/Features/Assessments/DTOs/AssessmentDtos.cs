@@ -23,7 +23,12 @@ public record CreateMissionFromAssessmentRequest(
     string? Description,
     List<MissionPersonnelAssignmentRequest> Personnel,
     List<Guid> DroneIds,
-    string? IdempotencyKey = null
+    string? IdempotencyKey = null,
+    MissionPriority Priority = MissionPriority.Normal,
+    InspectionObjective Objective = InspectionObjective.PeriodicInspection,
+    IReadOnlyList<string>? PriorityDefects = null,
+    string? EmergencyReason = null,
+    bool IsImmediate = false
 );
 
 public record DroneMetricSubmitDto(

@@ -9,7 +9,9 @@ public record MissionAssignmentItemRequest(Guid UserId, string? Role = null, boo
 public record Mf01CreateMission(string Title, Guid RegionId, MissionType MissionType, Guid? ScheduleId,
     string? TriggerReason, DateTime PlannedStart, DateTime PlannedEnd, string? Description,
     DateTime? ConfirmationDeadline = null, string? ManagerInstructions = null, Guid? AssignedToUserId = null,
-    Guid? DroneId = null, IReadOnlyList<MissionAssignmentItemRequest>? Assignments = null, Guid? PreMissionAssessmentId = null);
+    Guid? DroneId = null, IReadOnlyList<MissionAssignmentItemRequest>? Assignments = null, Guid? PreMissionAssessmentId = null,
+    MissionPriority Priority = MissionPriority.Normal, InspectionObjective Objective = InspectionObjective.PeriodicInspection,
+    IReadOnlyList<string>? PriorityDefects = null, string? EmergencyReason = null, bool IsImmediate = false);
 public record Mf01Assignment(Guid UserId, string AssignmentRole);
 public record Mf01Handover(Guid DroneId, Guid ReceivedBy, string Condition, bool Accepted);
 

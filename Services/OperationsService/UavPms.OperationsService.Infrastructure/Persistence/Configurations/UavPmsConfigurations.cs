@@ -217,6 +217,13 @@ public class MissionConfiguration : IEntityTypeConfiguration<Mission>
         builder.Ignore(e => e.DroneCode);
         builder.Ignore(e => e.AssignedToUser);
 
+        builder.Property(e => e.Priority).HasDefaultValue(MissionPriority.Normal);
+        builder.Property(e => e.Objective).HasConversion<string>().HasDefaultValue(InspectionObjective.PeriodicInspection);
+        builder.Property(e => e.PriorityDefectsJson).HasColumnType("text").HasDefaultValue("[]");
+        builder.Property(e => e.EmergencyReason).HasColumnType("text");
+        builder.Property(e => e.IsImmediate).HasDefaultValue(false);
+        builder.HasIndex(e => new { e.Priority, e.PlannedStart, e.CreatedAt });
+
         builder.Property(e => e.IsOverdueNotified).HasDefaultValue(false);
         builder.Property(e => e.ManagerInstructions).HasColumnType("text");
         builder.Property(e => e.ConfirmationDeadline);

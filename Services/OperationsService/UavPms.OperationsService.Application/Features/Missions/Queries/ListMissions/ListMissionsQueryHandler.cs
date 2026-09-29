@@ -22,7 +22,8 @@ public class ListMissionsQueryHandler : IRequestHandler<ListMissionsQuery, Pagin
             request.Search,
             request.Status,
             request.SortBy,
-            request.SortDescending);
+            request.SortDescending,
+            request.Priority);
 
         var dtos = items.Select(mission => new MissionDto
         {
@@ -37,7 +38,16 @@ public class ListMissionsQueryHandler : IRequestHandler<ListMissionsQuery, Pagin
             InspectorEmail = mission.Inspector?.Email ?? string.Empty,
             UavId = mission.UavId,
             ScheduledStartAt = mission.ScheduledStartAt,
+            PlannedStart = mission.PlannedStart,
+            PlannedEnd = mission.PlannedEnd,
             Status = mission.Status.ToString(),
+            Priority = mission.Priority.ToString(),
+            Objective = mission.Objective.ToString(),
+            PriorityDefects = !string.IsNullOrWhiteSpace(mission.PriorityDefectsJson)
+                ? System.Text.Json.JsonSerializer.Deserialize<List<string>>(mission.PriorityDefectsJson) ?? new List<string>()
+                : new List<string>(),
+            EmergencyReason = mission.EmergencyReason,
+            IsImmediate = mission.IsImmediate,
             Description = mission.Description,
             ManagerId = mission.ManagerId,
             ManagerEmail = mission.Manager?.Email ?? string.Empty,

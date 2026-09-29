@@ -18,7 +18,8 @@ public class MissionRepository : GenericRepository<Mission>, IMissionRepository
         string? search,
         string? status,
         string? sortBy = "createdAt",
-        bool sortDescending = true)
+        bool sortDescending = true,
+        string? priority = null)
     {
         var query = _context.Missions
             .Include(m => m.Inspector)
@@ -37,7 +38,11 @@ public class MissionRepository : GenericRepository<Mission>, IMissionRepository
             query = query.Where(m => m.Status == parsedStatus);
         }
 
-        
+        if (!string.IsNullOrWhiteSpace(priority) && Enum.TryParse<MissionPriority>(priority, true, out var parsedPriority))
+        {
+            query = query.Where(m => m.Priority == parsedPriority);
+        }
+
         query = ApplySorting(query, sortBy, sortDescending);
 
         var totalCount = await query.CountAsync();
@@ -58,6 +63,13 @@ public class MissionRepository : GenericRepository<Mission>, IMissionRepository
 
         return normalizedSortBy switch
         {
+            "priority" => sortDescending
+                ? query.OrderByDescending(m => m.Priority)
+                       .ThenBy(m => m.PlannedStart)
+                       .ThenBy(m => m.CreatedAt)
+                : query.OrderBy(m => m.Priority)
+                       .ThenBy(m => m.PlannedStart)
+                       .ThenBy(m => m.CreatedAt),
             "title" => sortDescending
                 ? query.OrderByDescending(m => m.Title)
                 : query.OrderBy(m => m.Title),
