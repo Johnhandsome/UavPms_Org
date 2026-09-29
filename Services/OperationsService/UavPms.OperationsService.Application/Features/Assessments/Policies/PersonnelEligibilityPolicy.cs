@@ -31,6 +31,15 @@ public static class PersonnelEligibilityPolicy
             .ToList();
 
         var primaryRole = roleNames.FirstOrDefault(r => AllowedOperationalRoles.Contains(r, StringComparer.OrdinalIgnoreCase));
+        if (primaryRole != null)
+        {
+            if (primaryRole.Equals(UserRoles.Inspector, StringComparison.OrdinalIgnoreCase) || primaryRole.Equals("Pilot", StringComparison.OrdinalIgnoreCase))
+                primaryRole = UserRoles.Inspector;
+            else if (primaryRole.Equals(UserRoles.Analyst, StringComparison.OrdinalIgnoreCase))
+                primaryRole = UserRoles.Analyst;
+            else if (primaryRole.Equals("Technician", StringComparison.OrdinalIgnoreCase) || primaryRole.Equals(UserRoles.MaintenanceTechnician, StringComparison.OrdinalIgnoreCase))
+                primaryRole = "Technician";
+        }
         var hasValidRole = primaryRole != null;
 
         var isActive = user.IsEmailVerified && (user.Status == "Active" || user.Status == "Enabled");
@@ -66,7 +75,7 @@ public static class PersonnelEligibilityPolicy
         {
             ["userId"] = user.Id,
             ["fullName"] = user.FullName ?? string.Empty,
-            ["role"] = primaryRole ?? (roleNames.FirstOrDefault() ?? "Inspector"),
+            ["role"] = primaryRole ?? UserRoles.Inspector,
             ["hasInspectorRole"] = roleNames.Any(r => r.Equals(UserRoles.Inspector, StringComparison.OrdinalIgnoreCase)),
             ["hasValidRole"] = hasValidRole,
             ["isActive"] = isActive,

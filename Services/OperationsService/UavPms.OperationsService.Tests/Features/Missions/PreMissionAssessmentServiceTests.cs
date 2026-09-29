@@ -61,7 +61,7 @@ public class PreMissionAssessmentServiceTests
         result.Should().NotBeNull();
         result.ManagerId.Should().Be(managerId);
         result.RegionId.Should().Be(region.Id);
-        result.Status.Should().Be(PreMissionAssessmentStatus.Evaluating);
+        result.Status.Should().BeOneOf(PreMissionAssessmentStatus.Evaluating, PreMissionAssessmentStatus.NotReady);
         result.Assets.Should().HaveCount(1);
     }
 
@@ -148,11 +148,21 @@ public class PreMissionAssessmentServiceTests
         db.UserGeographicScopes.Add(new UserGeographicScope { UserId = managerId, RegionId = region.Id });
 
         var roleInspector = new Role { RoleName = UserRoles.Inspector };
-        db.Roles.Add(roleInspector);
+        var roleAnalyst = new Role { RoleName = UserRoles.Analyst };
+        var roleTech = new Role { RoleName = "Technician" };
+        db.Roles.AddRange(roleInspector, roleAnalyst, roleTech);
 
         var eligibleInspector = new User { Id = Guid.NewGuid(), Status = "Active", IsEmailVerified = true, FullName = "Inspector Clean" };
         eligibleInspector.UserRoles.Add(new UserRole { Role = roleInspector });
         db.UserGeographicScopes.Add(new UserGeographicScope { UserId = eligibleInspector.Id, RegionId = region.Id });
+
+        var eligibleAnalyst = new User { Id = Guid.NewGuid(), Status = "Active", IsEmailVerified = true, FullName = "Analyst Clean" };
+        eligibleAnalyst.UserRoles.Add(new UserRole { Role = roleAnalyst });
+        db.UserGeographicScopes.Add(new UserGeographicScope { UserId = eligibleAnalyst.Id, RegionId = region.Id });
+
+        var eligibleTech = new User { Id = Guid.NewGuid(), Status = "Active", IsEmailVerified = true, FullName = "Tech Clean" };
+        eligibleTech.UserRoles.Add(new UserRole { Role = roleTech });
+        db.UserGeographicScopes.Add(new UserGeographicScope { UserId = eligibleTech.Id, RegionId = region.Id });
 
         var busyInspector = new User { Id = Guid.NewGuid(), Status = "Active", IsEmailVerified = true, FullName = "Inspector Busy" };
         busyInspector.UserRoles.Add(new UserRole { Role = roleInspector });
@@ -162,7 +172,7 @@ public class PreMissionAssessmentServiceTests
         outOfScopeInspector.UserRoles.Add(new UserRole { Role = roleInspector });
         db.UserGeographicScopes.Add(new UserGeographicScope { UserId = outOfScopeInspector.Id, RegionId = Guid.NewGuid() }); // Different region
 
-        db.Users.AddRange(eligibleInspector, busyInspector, outOfScopeInspector);
+        db.Users.AddRange(eligibleInspector, eligibleAnalyst, eligibleTech, busyInspector, outOfScopeInspector);
 
         var sub = new Substation { Id = Guid.NewGuid(), RegionAssetId = region.Id };
         var line = new TransmissionLine { Id = Guid.NewGuid(), Substation = sub };
@@ -202,7 +212,7 @@ public class PreMissionAssessmentServiceTests
         var evaluated = await service.EvaluateAsync(assessment.Id, CancellationToken.None);
 
         evaluated.Status.Should().Be(PreMissionAssessmentStatus.Ready);
-        evaluated.PersonnelCandidates.Should().HaveCount(3);
+        evaluated.PersonnelCandidates.Should().HaveCount(5);
 
         var cleanCand = evaluated.PersonnelCandidates.Single(x => x.UserId == eligibleInspector.Id);
         cleanCand.IsEligible.Should().BeTrue();

@@ -154,6 +154,9 @@ public sealed class PreMissionAssessmentService
 
         var query = _db.PreMissionAssessments
             .Include(x => x.Assets)
+            .Include(x => x.PersonnelCandidates)
+            .Include(x => x.DroneCandidates)
+            .Include(x => x.Region)
             .Where(x => x.ManagerId == _current.UserId || _current.Roles.Contains(UserRoles.SystemAdmin, StringComparer.OrdinalIgnoreCase));
 
         if (!string.IsNullOrWhiteSpace(status))
@@ -222,7 +225,19 @@ public sealed class PreMissionAssessmentService
             throw new ForbiddenException("ASSESSMENT_ACCESS_DENIED");
 
         if (assessment.Status == PreMissionAssessmentStatus.Completed)
-            throw new BusinessRuleException("ASSESSMENT_ALREADY_CONSUMED");
+            throw new BusinessRuleException("ASSESSMENT_ALREADY_COMPLETED", "Đánh giá tiền nhiệm vụ đã hoàn thành tạo nhiệm vụ bay.");
+
+        if (assessment.Status == PreMissionAssessmentStatus.Cancelled)
+            throw new BusinessRuleException("ASSESSMENT_CANCELLED", "Bản đánh giá đã bị hủy, không thể đánh giá lại.");
+
+        if (assessment.Status == PreMissionAssessmentStatus.Expired ||
+            assessment.PlannedEnd <= DateTime.UtcNow ||
+            AssessmentExpiryPolicy.CheckAndApplyExpiry(assessment))
+        {
+            assessment.Status = PreMissionAssessmentStatus.Expired;
+            await _db.SaveChangesAsync(ct);
+            throw new BusinessRuleException("ASSESSMENT_EXPIRED", "Khung giờ bay hoặc thời hạn của bản đánh giá đã hết hạn, không thể đánh giá lại.");
+        }
 
         // Step 1: Site Feasibility
         var assetIds = assessment.Assets.Select(x => x.AssetId).ToList();
@@ -256,8 +271,10 @@ public sealed class PreMissionAssessmentService
             .Where(x => x.IsEmailVerified && (x.Status == "Active" || x.Status == "Enabled"))
             .ToListAsync(ct);
 
+        var nonOperationalRoles = new[] { UserRoles.SystemAdmin, UserRoles.Manager, "SystemAdmin", "Manager" };
         var operationalRoles = new[] { UserRoles.Inspector, UserRoles.Analyst, "Technician", UserRoles.MaintenanceTechnician, "Pilot" };
         var candidateUsers = activeUsers
+            .Where(x => !x.UserRoles.Any(r => r.Role != null && nonOperationalRoles.Contains(r.Role.RoleName, StringComparer.OrdinalIgnoreCase)))
             .Where(x => x.UserRoles.Any(r => r.Role != null && operationalRoles.Contains(r.Role.RoleName, StringComparer.OrdinalIgnoreCase)))
             .ToList();
 
@@ -365,7 +382,8 @@ public sealed class PreMissionAssessmentService
 
         var isReady = isSiteFeasible && hasEligiblePersonnel && hasEligibleDrone;
         assessment.Status = isReady ? PreMissionAssessmentStatus.Ready : PreMissionAssessmentStatus.NotReady;
-        assessment.ValidUntil = DateTime.UtcNow.AddHours(4);
+        var expiryCandidate = DateTime.UtcNow.AddHours(4);
+        assessment.ValidUntil = expiryCandidate < assessment.PlannedEnd ? expiryCandidate : assessment.PlannedEnd;
         assessment.Version++;
         assessment.EvaluationPolicyVersion = "v2.0";
 
@@ -409,7 +427,7 @@ public sealed class PreMissionAssessmentService
             assessment.ConsumedByMissionId.HasValue ||
             await _db.Missions.AnyAsync(x => x.PreMissionAssessmentId == request.AssessmentId, ct))
         {
-            throw new BusinessRuleException("ASSESSMENT_ALREADY_CONSUMED");
+            throw new BusinessRuleException("ASSESSMENT_ALREADY_COMPLETED", "Đánh giá tiền nhiệm vụ đã hoàn thành tạo nhiệm vụ bay.");
         }
 
         // Gap #9: Expiry on use

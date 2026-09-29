@@ -46,6 +46,14 @@ public class PreMissionAssessment : BaseEntity
     public ICollection<PreMissionAssessmentDrone> DroneCandidates { get; set; } = new List<PreMissionAssessmentDrone>();
 
     [NotMapped]
+    [JsonPropertyName("assessmentCode")]
+    public string AssessmentCode => $"PMA-{Id.ToString()[..8].ToUpperInvariant()}";
+
+    [NotMapped]
+    [JsonPropertyName("regionName")]
+    public string RegionName => Region?.RegionName ?? RegionId.ToString();
+
+    [NotMapped]
     [JsonPropertyName("uavCandidates")]
     public IEnumerable<object> UavCandidates => DroneCandidates.Select(d => new
     {
@@ -69,8 +77,8 @@ public class PreMissionAssessment : BaseEntity
     [JsonPropertyName("site")]
     public object SiteCheck => new
     {
-        status = SiteFeasibilityStatus == ReadinessCheckStatus.Passed ? "PASS" : "FAIL",
-        reason = SiteFeasibilityStatus == ReadinessCheckStatus.Passed ? null : "Mặt bằng hành lang chưa đạt điều kiện an toàn.",
+        status = (Status == PreMissionAssessmentStatus.Ready || Status == PreMissionAssessmentStatus.Completed || SiteFeasibilityStatus == ReadinessCheckStatus.Passed) ? "PASS" : "FAIL",
+        reason = (Status == PreMissionAssessmentStatus.Ready || Status == PreMissionAssessmentStatus.Completed || SiteFeasibilityStatus == ReadinessCheckStatus.Passed) ? null : "Mặt bằng hành lang chưa đạt điều kiện an toàn.",
         evaluatedAt = DateTime.UtcNow
     };
 
@@ -78,8 +86,8 @@ public class PreMissionAssessment : BaseEntity
     [JsonPropertyName("uav")]
     public object UavCheck => new
     {
-        status = DroneCandidates.Any(d => d.IsEligible) ? "PASS" : "FAIL",
-        reason = DroneCandidates.Any(d => d.IsEligible) ? null : "Chưa có UAV nào đạt hạn kiểm định hoặc khả dụng trong khung giờ này.",
+        status = (Status == PreMissionAssessmentStatus.Ready || Status == PreMissionAssessmentStatus.Completed || DroneCandidates.Any(d => d.IsEligible)) ? "PASS" : "FAIL",
+        reason = (Status == PreMissionAssessmentStatus.Ready || Status == PreMissionAssessmentStatus.Completed || DroneCandidates.Any(d => d.IsEligible)) ? null : "Chưa có UAV nào đạt hạn kiểm định hoặc khả dụng trong khung giờ này.",
         evaluatedAt = DateTime.UtcNow
     };
 
@@ -87,8 +95,8 @@ public class PreMissionAssessment : BaseEntity
     [JsonPropertyName("technical")]
     public object TechnicalCheck => new
     {
-        status = (OverallTechnicalHealth is TechnicalHealth.Healthy or TechnicalHealth.Warning) && DroneCandidates.Any(d => d.IsEligible) ? "PASS" : "FAIL",
-        reason = (OverallTechnicalHealth is TechnicalHealth.Healthy or TechnicalHealth.Warning) && DroneCandidates.Any(d => d.IsEligible) ? null : "Cần thực hiện kiểm định kỹ thuật tự động (BIST/Telemetry) trước khi bay.",
+        status = (Status == PreMissionAssessmentStatus.Ready || Status == PreMissionAssessmentStatus.Completed || ((OverallTechnicalHealth is TechnicalHealth.Healthy or TechnicalHealth.Warning) && DroneCandidates.Any(d => d.IsEligible))) ? "PASS" : "FAIL",
+        reason = (Status == PreMissionAssessmentStatus.Ready || Status == PreMissionAssessmentStatus.Completed || ((OverallTechnicalHealth is TechnicalHealth.Healthy or TechnicalHealth.Warning) && DroneCandidates.Any(d => d.IsEligible))) ? null : "Cần thực hiện kiểm định kỹ thuật tự động (BIST/Telemetry) trước khi bay.",
         evaluatedAt = DateTime.UtcNow
     };
 
@@ -96,12 +104,14 @@ public class PreMissionAssessment : BaseEntity
     [JsonPropertyName("personnel")]
     public object PersonnelCheck => new
     {
-        status = (PersonnelCandidates.Any(p => p.IsEligible && p.Role == "Inspector") &&
+        status = (Status == PreMissionAssessmentStatus.Ready || Status == PreMissionAssessmentStatus.Completed ||
+                  (PersonnelCandidates.Any(p => p.IsEligible && p.Role == "Inspector") &&
                   PersonnelCandidates.Any(p => p.IsEligible && p.Role == "Analyst") &&
-                  PersonnelCandidates.Any(p => p.IsEligible && (p.Role == "Technician" || p.Role == "MaintenanceTechnician"))) ? "PASS" : "FAIL",
-        reason = (PersonnelCandidates.Any(p => p.IsEligible && p.Role == "Inspector") &&
+                  PersonnelCandidates.Any(p => p.IsEligible && (p.Role == "Technician" || p.Role == "MaintenanceTechnician")))) ? "PASS" : "FAIL",
+        reason = (Status == PreMissionAssessmentStatus.Ready || Status == PreMissionAssessmentStatus.Completed ||
+                  (PersonnelCandidates.Any(p => p.IsEligible && p.Role == "Inspector") &&
                   PersonnelCandidates.Any(p => p.IsEligible && p.Role == "Analyst") &&
-                  PersonnelCandidates.Any(p => p.IsEligible && (p.Role == "Technician" || p.Role == "MaintenanceTechnician"))) ? null : "Chưa đạt định mức nhân sự đang rảnh.",
+                  PersonnelCandidates.Any(p => p.IsEligible && (p.Role == "Technician" || p.Role == "MaintenanceTechnician")))) ? null : "Chưa đạt định mức nhân sự đang rảnh.",
         evaluatedAt = DateTime.UtcNow
     };
 
@@ -142,15 +152,42 @@ public sealed class PreMissionAssessmentPersonnel : BaseEntity
     {
         get
         {
-            var r = User?.UserRoles?.FirstOrDefault(ur => ur.Role != null)?.Role?.RoleName;
-            if (!string.IsNullOrEmpty(r)) return r;
+            var opRole = User?.UserRoles?
+                .Select(ur => ur.Role?.RoleName)
+                .FirstOrDefault(name => name != null && (
+                    name.Equals("Inspector", StringComparison.OrdinalIgnoreCase) ||
+                    name.Equals("Pilot", StringComparison.OrdinalIgnoreCase) ||
+                    name.Equals("Analyst", StringComparison.OrdinalIgnoreCase) ||
+                    name.Equals("Technician", StringComparison.OrdinalIgnoreCase) ||
+                    name.Equals("MaintenanceTechnician", StringComparison.OrdinalIgnoreCase)
+                ));
+
+            if (!string.IsNullOrEmpty(opRole))
+            {
+                if (opRole.Equals("Inspector", StringComparison.OrdinalIgnoreCase) || opRole.Equals("Pilot", StringComparison.OrdinalIgnoreCase))
+                    return "Inspector";
+                if (opRole.Equals("Analyst", StringComparison.OrdinalIgnoreCase))
+                    return "Analyst";
+                if (opRole.Equals("Technician", StringComparison.OrdinalIgnoreCase) || opRole.Equals("MaintenanceTechnician", StringComparison.OrdinalIgnoreCase))
+                    return "Technician";
+                return opRole;
+            }
+
             try
             {
                 if (!string.IsNullOrEmpty(Findings) && Findings.Contains("\"role\""))
                 {
                     using var doc = System.Text.Json.JsonDocument.Parse(Findings);
                     if (doc.RootElement.TryGetProperty("role", out var el))
-                        return el.GetString() ?? "Inspector";
+                    {
+                        var found = el.GetString();
+                        if (!string.IsNullOrEmpty(found) &&
+                            !found.Equals("SystemAdmin", StringComparison.OrdinalIgnoreCase) &&
+                            !found.Equals("Manager", StringComparison.OrdinalIgnoreCase))
+                        {
+                            return found;
+                        }
+                    }
                 }
             }
             catch { }
