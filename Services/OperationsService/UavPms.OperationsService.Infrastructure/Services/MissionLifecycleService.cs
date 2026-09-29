@@ -30,9 +30,58 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
         _notifier = notifier;
     }
 
+    private async Task<Guid?> ResolveUserIdAsync(Guid? id, CancellationToken ct)
+    {
+        if (!id.HasValue || id.Value == Guid.Empty) return null;
+        if (await _db.Users.AnyAsync(u => u.Id == id.Value, ct)) return id.Value;
+        var cand = await _db.PreMissionAssessmentPersonnel.FirstOrDefaultAsync(p => p.Id == id.Value, ct);
+        if (cand != null && await _db.Users.AnyAsync(u => u.Id == cand.UserId, ct)) return cand.UserId;
+        return null;
+    }
+
+    private async Task<Guid?> ResolveDroneIdAsync(Guid? id, CancellationToken ct)
+    {
+        if (!id.HasValue || id.Value == Guid.Empty) return null;
+        if (await _db.Uavs.AnyAsync(d => d.Id == id.Value, ct)) return id.Value;
+        var cand = await _db.PreMissionAssessmentDrones.FirstOrDefaultAsync(d => d.Id == id.Value, ct);
+        if (cand != null && await _db.Uavs.AnyAsync(d => d.Id == cand.DroneId, ct)) return cand.DroneId;
+        return null;
+    }
+
     public async Task<Mission> CreateAsync(Mf01CreateMission request, CancellationToken ct)
     {
         await RequireActiveCaller(ct); await RequireManageRegion(request.RegionId, ct);
+
+        var resolvedAssignedUserId = await ResolveUserIdAsync(request.AssignedToUserId, ct);
+        var resolvedDroneId = await ResolveDroneIdAsync(request.DroneId, ct);
+        var resolvedAssignments = new List<MissionAssignmentItemRequest>();
+        if (request.Assignments != null && request.Assignments.Count > 0)
+        {
+            foreach (var a in request.Assignments)
+            {
+                var resolvedUid = await ResolveUserIdAsync(a.UserId, ct);
+                if (resolvedUid.HasValue)
+                {
+                    resolvedAssignments.Add(a with { UserId = resolvedUid.Value });
+                }
+            }
+        }
+
+        if (!resolvedAssignedUserId.HasValue)
+        {
+            var inspItem = resolvedAssignments.FirstOrDefault(x =>
+                string.Equals(x.Role, "INSPECTOR", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(x.Role, "PILOT", StringComparison.OrdinalIgnoreCase));
+            if (inspItem != null)
+            {
+                resolvedAssignedUserId = inspItem.UserId;
+            }
+            else if (resolvedAssignments.Count > 0)
+            {
+                resolvedAssignedUserId = resolvedAssignments[0].UserId;
+            }
+        }
+
         if (request.PreMissionAssessmentId.HasValue)
         {
             var existingMission = await _db.Missions
@@ -40,31 +89,35 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
                 .FirstOrDefaultAsync(x => x.PreMissionAssessmentId == request.PreMissionAssessmentId.Value, ct);
             if (existingMission != null)
             {
-                if (request.Assignments != null && request.Assignments.Count > 0)
+                foreach (var a in resolvedAssignments)
                 {
-                    foreach (var a in request.Assignments)
+                    var existing = existingMission.Assignments.FirstOrDefault(x => x.UserId == a.UserId);
+                    if (existing != null)
                     {
-                        if (a.UserId != Guid.Empty && !existingMission.Assignments.Any(x => x.UserId == a.UserId && x.Status == MissionAssignmentStatus.Active))
+                        if (!string.IsNullOrWhiteSpace(a.Role)) existing.AssignmentRole = a.Role;
+                        if (a.IsRequired.HasValue) existing.IsRequired = a.IsRequired.Value;
+                    }
+                    else
+                    {
+                        existingMission.Assignments.Add(new MissionAssignment
                         {
-                            existingMission.Assignments.Add(new MissionAssignment
-                            {
-                                MissionId = existingMission.Id,
-                                UserId = a.UserId,
-                                AssignmentRole = !string.IsNullOrWhiteSpace(a.Role) ? a.Role : "PILOT",
-                                AssignedByUserId = _current.UserId,
-                                IsRequired = a.IsRequired ?? true,
-                                ResponseStatus = MissionAssignmentResponse.Pending
-                            });
-                        }
+                            MissionId = existingMission.Id,
+                            UserId = a.UserId,
+                            AssignmentRole = !string.IsNullOrWhiteSpace(a.Role) ? a.Role : "PILOT",
+                            AssignedByUserId = _current.UserId,
+                            IsRequired = a.IsRequired ?? true,
+                            ResponseStatus = MissionAssignmentResponse.Pending
+                        });
                     }
                 }
-                if (request.DroneId.HasValue && (!existingMission.UavId.HasValue || existingMission.UavId.Value == Guid.Empty))
+                if (resolvedDroneId.HasValue && (!existingMission.UavId.HasValue || existingMission.UavId.Value == Guid.Empty))
                 {
-                    existingMission.UavId = request.DroneId.Value;
+                    existingMission.UavId = resolvedDroneId.Value;
                 }
-                if (request.AssignedToUserId.HasValue && (!existingMission.InspectorId.HasValue || existingMission.InspectorId.Value == Guid.Empty))
+                if (resolvedAssignedUserId.HasValue && (!existingMission.InspectorId.HasValue || existingMission.InspectorId.Value == Guid.Empty))
                 {
-                    existingMission.InspectorId = request.AssignedToUserId.Value;
+                    existingMission.InspectorId = resolvedAssignedUserId.Value;
+                    existingMission.AssignedToUserId = resolvedAssignedUserId.Value;
                 }
                 if (!existingMission.InspectorId.HasValue || existingMission.InspectorId.Value == Guid.Empty)
                 {
@@ -113,51 +166,44 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
             Status = status,
             ConfirmationDeadline = request.ConfirmationDeadline,
             ManagerInstructions = request.ManagerInstructions,
-            AssignedToUserId = request.AssignedToUserId ?? Guid.Empty,
-            InspectorId = request.AssignedToUserId != Guid.Empty ? request.AssignedToUserId : null,
-            UavId = request.DroneId,
+            AssignedToUserId = resolvedAssignedUserId ?? Guid.Empty,
+            InspectorId = resolvedAssignedUserId,
+            UavId = resolvedDroneId,
             PreMissionAssessmentId = request.PreMissionAssessmentId
         };
 
-        if (request.AssignedToUserId.HasValue && request.AssignedToUserId.Value != Guid.Empty)
+        if (resolvedAssignedUserId.HasValue && resolvedAssignedUserId.Value != Guid.Empty)
         {
-            var assignment = new MissionAssignment
+            mission.Assignments.Add(new MissionAssignment
             {
                 MissionId = mission.Id,
-                UserId = request.AssignedToUserId.Value,
-                AssignmentRole = "PILOT",
+                UserId = resolvedAssignedUserId.Value,
+                AssignmentRole = "INSPECTOR",
                 AssignedByUserId = _current.UserId,
                 IsRequired = true,
                 ResponseStatus = MissionAssignmentResponse.Pending
-            };
-            mission.Assignments.Add(assignment);
+            });
         }
 
-        if (request.Assignments != null && request.Assignments.Count > 0)
+        foreach (var a in resolvedAssignments)
         {
-            foreach (var a in request.Assignments)
+            var existing = mission.Assignments.FirstOrDefault(x => x.UserId == a.UserId);
+            if (existing != null)
             {
-                if (a.UserId != Guid.Empty)
+                if (!string.IsNullOrWhiteSpace(a.Role)) existing.AssignmentRole = a.Role;
+                if (a.IsRequired.HasValue) existing.IsRequired = a.IsRequired.Value;
+            }
+            else
+            {
+                mission.Assignments.Add(new MissionAssignment
                 {
-                    var existing = mission.Assignments.FirstOrDefault(x => x.UserId == a.UserId);
-                    if (existing != null)
-                    {
-                        if (!string.IsNullOrWhiteSpace(a.Role)) existing.AssignmentRole = a.Role;
-                        if (a.IsRequired.HasValue) existing.IsRequired = a.IsRequired.Value;
-                    }
-                    else
-                    {
-                        mission.Assignments.Add(new MissionAssignment
-                        {
-                            MissionId = mission.Id,
-                            UserId = a.UserId,
-                            AssignmentRole = !string.IsNullOrWhiteSpace(a.Role) ? a.Role : "PILOT",
-                            AssignedByUserId = _current.UserId,
-                            IsRequired = a.IsRequired ?? true,
-                            ResponseStatus = MissionAssignmentResponse.Pending
-                        });
-                    }
-                }
+                    MissionId = mission.Id,
+                    UserId = a.UserId,
+                    AssignmentRole = !string.IsNullOrWhiteSpace(a.Role) ? a.Role : "INSPECTOR",
+                    AssignedByUserId = _current.UserId,
+                    IsRequired = a.IsRequired ?? true,
+                    ResponseStatus = MissionAssignmentResponse.Pending
+                });
             }
         }
 
