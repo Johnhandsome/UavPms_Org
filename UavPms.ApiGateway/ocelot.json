@@ -101,6 +101,14 @@
       "UpstreamHttpMethod": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
     },
     {
+      "DownstreamPathTemplate": "/api/v{version}/notifications/realtime/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [{ "Host": "notificationservice", "Port": 8080 }],
+      "UpstreamPathTemplate": "/api/v{version}/notifications/realtime/{everything}",
+      "UpstreamHttpMethod": [],
+      "Priority": 100
+    },
+    {
       "DownstreamPathTemplate": "/api/v{version}/notifications/{everything}",
       "DownstreamScheme": "http",
       "DownstreamHostAndPorts": [{ "Host": "notificationservice", "Port": 8080 }],
@@ -116,14 +124,14 @@
     },
     {
       "DownstreamPathTemplate": "/hubs/notifications/{everything}",
-      "DownstreamScheme": "http",
+      "DownstreamScheme": "ws",
       "DownstreamHostAndPorts": [{ "Host": "notificationservice", "Port": 8080 }],
       "UpstreamPathTemplate": "/hubs/notifications/{everything}",
       "UpstreamHttpMethod": ["GET", "POST", "OPTIONS"]
     },
     {
       "DownstreamPathTemplate": "/hubs/notifications",
-      "DownstreamScheme": "http",
+      "DownstreamScheme": "ws",
       "DownstreamHostAndPorts": [{ "Host": "notificationservice", "Port": 8080 }],
       "UpstreamPathTemplate": "/hubs/notifications",
       "UpstreamHttpMethod": ["GET", "POST", "OPTIONS"]
