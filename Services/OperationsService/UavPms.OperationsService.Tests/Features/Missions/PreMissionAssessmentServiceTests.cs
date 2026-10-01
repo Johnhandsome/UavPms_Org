@@ -136,6 +136,45 @@ public class PreMissionAssessmentServiceTests
     }
 
     [Fact]
+    public async Task CreateAssessment_DbUpdateExceptionWithSameIdempotencyKey_RecoversGracefully()
+    {
+        var managerId = Guid.NewGuid();
+        var user = CreateUserMock(managerId, UserRoles.Manager);
+        await using var db = CreateContext(user.Object);
+
+        db.Users.Add(new User { Id = managerId, Status = "Active" });
+        var region = new Region { Id = Guid.NewGuid(), Code = "REG-01" };
+        db.Regions.Add(region);
+        db.UserGeographicScopes.Add(new UserGeographicScope { UserId = managerId, RegionId = region.Id });
+
+        var sub = new Substation { Id = Guid.NewGuid(), RegionAssetId = region.Id };
+        var line = new TransmissionLine { Id = Guid.NewGuid(), Substation = sub };
+        var tower = new Tower { Id = Guid.NewGuid(), TransmissionLine = line };
+        var asset = new Asset { Id = Guid.NewGuid(), Tower = tower, Status = "Active" };
+        db.Assets.Add(asset);
+
+        var key = "RACE-KEY-001";
+        var existing = new PreMissionAssessment
+        {
+            Id = Guid.NewGuid(),
+            RegionId = region.Id,
+            ManagerId = managerId,
+            PlannedStart = DateTime.UtcNow.AddDays(1),
+            PlannedEnd = DateTime.UtcNow.AddDays(1).AddHours(4),
+            IdempotencyKey = key,
+            Status = PreMissionAssessmentStatus.Ready
+        };
+        db.PreMissionAssessments.Add(existing);
+        await db.SaveChangesAsync();
+
+        var service = new PreMissionAssessmentService(db, user.Object);
+        var result = await service.CreateAsync(region.Id, DateTime.UtcNow.AddDays(1), DateTime.UtcNow.AddDays(1).AddHours(4), new[] { asset.Id }, null, key, CancellationToken.None);
+
+        result.Should().NotBeNull();
+        result.Id.Should().Be(existing.Id);
+    }
+
+    [Fact]
     public async Task Evaluate_DetectsEligiblePersonnel_AndChecksScheduleConflictAndScope()
     {
         var managerId = Guid.NewGuid();
@@ -308,6 +347,73 @@ public class PreMissionAssessmentServiceTests
     }
 
     [Fact]
+    public async Task GetAsync_DifferentManagerSameRegionScope_AllowsAccess()
+    {
+        var creatorManagerId = Guid.NewGuid();
+        var shiftManagerId = Guid.NewGuid();
+        var regionId = Guid.NewGuid();
+
+        var shiftUser = CreateUserMock(shiftManagerId, UserRoles.Manager);
+        await using var db = CreateContext(shiftUser.Object);
+
+        db.Users.Add(new User { Id = creatorManagerId, Status = "Active" });
+        db.Users.Add(new User { Id = shiftManagerId, Status = "Active" });
+        db.Regions.Add(new Region { Id = regionId, Code = "REG-SCOPE-01" });
+        db.UserGeographicScopes.Add(new UserGeographicScope { UserId = shiftManagerId, RegionId = regionId });
+
+        var assessment = new PreMissionAssessment
+        {
+            ManagerId = creatorManagerId,
+            RegionId = regionId,
+            PlannedStart = DateTime.UtcNow.AddDays(1),
+            PlannedEnd = DateTime.UtcNow.AddDays(1).AddHours(4),
+            Status = PreMissionAssessmentStatus.Ready
+        };
+        db.PreMissionAssessments.Add(assessment);
+        await db.SaveChangesAsync();
+
+        var service = new PreMissionAssessmentService(db, shiftUser.Object);
+        var result = await service.GetAsync(assessment.Id, CancellationToken.None);
+
+        result.Should().NotBeNull();
+        result.Id.Should().Be(assessment.Id);
+    }
+
+    [Fact]
+    public async Task GetAsync_DifferentManagerDifferentRegionScope_ThrowsForbiddenException()
+    {
+        var creatorManagerId = Guid.NewGuid();
+        var otherManagerId = Guid.NewGuid();
+        var regionId = Guid.NewGuid();
+        var otherRegionId = Guid.NewGuid();
+
+        var otherUser = CreateUserMock(otherManagerId, UserRoles.Manager);
+        await using var db = CreateContext(otherUser.Object);
+
+        db.Users.Add(new User { Id = creatorManagerId, Status = "Active" });
+        db.Users.Add(new User { Id = otherManagerId, Status = "Active" });
+        db.Regions.Add(new Region { Id = regionId, Code = "REG-SCOPE-02" });
+        db.Regions.Add(new Region { Id = otherRegionId, Code = "REG-SCOPE-03" });
+        db.UserGeographicScopes.Add(new UserGeographicScope { UserId = otherManagerId, RegionId = otherRegionId });
+
+        var assessment = new PreMissionAssessment
+        {
+            ManagerId = creatorManagerId,
+            RegionId = regionId,
+            PlannedStart = DateTime.UtcNow.AddDays(1),
+            PlannedEnd = DateTime.UtcNow.AddDays(1).AddHours(4),
+            Status = PreMissionAssessmentStatus.Ready
+        };
+        db.PreMissionAssessments.Add(assessment);
+        await db.SaveChangesAsync();
+
+        var service = new PreMissionAssessmentService(db, otherUser.Object);
+        var act = () => service.GetAsync(assessment.Id, CancellationToken.None);
+
+        await act.Should().ThrowAsync<ForbiddenException>().WithMessage("*ASSESSMENT_ACCESS_DENIED*");
+    }
+
+    [Fact]
     public async Task MarkCompletedAsync_ValidAssessment_MarksCompletedSuccessfully()
     {
         var managerId = Guid.NewGuid();
@@ -367,6 +473,70 @@ public class PreMissionAssessmentServiceTests
 
         var act = () => service.MarkCompletedAsync(assessment.Id, Guid.NewGuid(), CancellationToken.None);
         await act.Should().ThrowAsync<BusinessRuleException>().WithMessage("*ASSESSMENT_ALREADY_COMPLETED*");
+    }
+
+    [Fact]
+    public async Task MarkCompletedAsync_MissionFromDifferentAssessment_ThrowsBusinessRuleException()
+    {
+        var managerId = Guid.NewGuid();
+        var user = CreateUserMock(managerId, UserRoles.Manager);
+        await using var db = CreateContext(user.Object);
+
+        db.Users.Add(new User { Id = managerId, Status = "Active" });
+        var region = new Region { Id = Guid.NewGuid(), Code = "REG-02" };
+        db.Regions.Add(region);
+
+        var assessment = new PreMissionAssessment
+        {
+            ManagerId = managerId,
+            RegionId = region.Id,
+            PlannedStart = DateTime.UtcNow.AddDays(1),
+            PlannedEnd = DateTime.UtcNow.AddDays(1).AddHours(4),
+            Status = PreMissionAssessmentStatus.Ready
+        };
+        db.PreMissionAssessments.Add(assessment);
+
+        var otherAssessmentId = Guid.NewGuid();
+        var otherMission = new Mission
+        {
+            Id = Guid.NewGuid(),
+            MissionCode = "MS-OTHER-01",
+            Title = "Other Mission",
+            PreMissionAssessmentId = otherAssessmentId
+        };
+        db.Missions.Add(otherMission);
+        await db.SaveChangesAsync();
+
+        var service = new PreMissionAssessmentService(db, user.Object);
+        var act = () => service.MarkCompletedAsync(assessment.Id, otherMission.Id, CancellationToken.None);
+        await act.Should().ThrowAsync<BusinessRuleException>().WithMessage("*INVALID_MISSION_REFERENCE*");
+    }
+
+    [Fact]
+    public async Task MarkCompletedAsync_ExpiredAssessment_ThrowsBusinessRuleException()
+    {
+        var managerId = Guid.NewGuid();
+        var user = CreateUserMock(managerId, UserRoles.Manager);
+        await using var db = CreateContext(user.Object);
+
+        db.Users.Add(new User { Id = managerId, Status = "Active" });
+        var region = new Region { Id = Guid.NewGuid(), Code = "REG-03" };
+        db.Regions.Add(region);
+
+        var assessment = new PreMissionAssessment
+        {
+            ManagerId = managerId,
+            RegionId = region.Id,
+            PlannedStart = DateTime.UtcNow.AddDays(-2),
+            PlannedEnd = DateTime.UtcNow.AddDays(-1),
+            Status = PreMissionAssessmentStatus.Expired
+        };
+        db.PreMissionAssessments.Add(assessment);
+        await db.SaveChangesAsync();
+
+        var service = new PreMissionAssessmentService(db, user.Object);
+        var act = () => service.MarkCompletedAsync(assessment.Id, null, CancellationToken.None);
+        await act.Should().ThrowAsync<BusinessRuleException>().WithMessage("*INVALID_ASSESSMENT_STATUS*");
     }
 
     [Fact]

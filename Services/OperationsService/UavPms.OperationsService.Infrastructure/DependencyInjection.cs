@@ -120,6 +120,8 @@ public static class DependencyInjection
             services.AddHostedService<MqttDroneConsumer>();
         }
 
+        services.AddHostedService<PreMissionAssessmentExpiryJob>();
+
         // Đăng ký HttpContextAccessor và CurrentUserServices
         services.AddHttpContextAccessor();
         services.AddScoped<ICurrentUserServices, CurrentUserServices>();
