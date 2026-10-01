@@ -117,6 +117,15 @@ public class ApplicationDbContext : DbContext
                     break;
                 case EntityState.Modified:
                     entry.Entity.UpdatedAt = DateTime.UtcNow;
+                    var versionProp = entry.Properties.FirstOrDefault(p => p.Metadata.Name == "Version");
+                    if (versionProp != null && versionProp.CurrentValue is uint currentVer)
+                    {
+                        var origVer = versionProp.OriginalValue is uint orig ? orig : currentVer;
+                        if (currentVer == origVer)
+                        {
+                            versionProp.CurrentValue = currentVer + 1;
+                        }
+                    }
                     break;
             }
         }

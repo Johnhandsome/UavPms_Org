@@ -28,6 +28,7 @@ public class Uav : BaseEntity
     public void UpdateStatus(DroneStatus status)
     {
         Status = status;
+        Version++;
     }
 
     public void UpdateBatteryLevel(double batteryLevel)
@@ -36,11 +37,13 @@ public class Uav : BaseEntity
             throw new ArgumentOutOfRangeException(nameof(batteryLevel), "Battery level must be between 0 and 100.");
         
         BatteryLevel = batteryLevel;
+        Version++;
     }
     
     public void UpdateCurrentLocation(Point location)
     {
         CurrentLocation = location ?? throw new ArgumentNullException(nameof(location));
+        Version++;
     }
     #endregion
 }

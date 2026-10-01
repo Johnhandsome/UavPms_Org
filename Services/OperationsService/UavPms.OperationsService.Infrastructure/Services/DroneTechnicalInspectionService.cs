@@ -30,6 +30,8 @@ public sealed class DroneTechnicalInspectionService : IDroneTechnicalInspectionS
         var drone = await _db.Uavs.SingleOrDefaultAsync(x => x.Id == request.DroneId && !x.IsDeleted, ct)
             ?? throw new NotFoundException("Drone", request.DroneId);
 
+        await EnsureCallerHasDroneAccessAsync(drone.Id, ct);
+
         var evalResult = DroneTechnicalHealthEvaluationPolicy.Evaluate(request.Metrics, drone.BatteryLevel);
 
         var inspection = new DroneTechnicalInspection
@@ -78,6 +80,7 @@ public sealed class DroneTechnicalInspectionService : IDroneTechnicalInspectionS
         drone.TechnicalHealth = inspection.Health;
         drone.LastTechnicalInspectionId = inspection.Id;
         drone.TechnicalHealthUpdatedAt = DateTime.UtcNow;
+        drone.Version++;
 
         // Audit log
         _db.AuditLogs.Add(new AuditLog
@@ -137,6 +140,33 @@ public sealed class DroneTechnicalInspectionService : IDroneTechnicalInspectionS
         var user = await _db.Users.SingleOrDefaultAsync(x => x.Id == _current.UserId, ct);
         if (user == null || (user.Status != "Active" && user.Status != "Enabled"))
             throw new ForbiddenException("ACTIVE_USER_REQUIRED");
+
+        var userScopes = await _db.UserGeographicScopes
+            .Where(s => s.UserId == _current.UserId)
+            .Select(s => s.RegionId)
+            .ToListAsync(ct);
+
+        if (userScopes.Count > 0 && !userScopes.Contains(null))
+        {
+            var droneMissionRegions = await _db.Missions
+                .Where(m => m.UavId == droneId)
+                .Select(m => (Guid?)m.RegionId)
+                .Distinct()
+                .ToListAsync(ct);
+
+            var droneAssessmentRegions = await _db.PreMissionAssessmentDrones
+                .Where(d => d.DroneId == droneId && d.Assessment != null)
+                .Select(d => (Guid?)d.Assessment!.RegionId)
+                .Distinct()
+                .ToListAsync(ct);
+
+            var associatedRegions = droneMissionRegions.Concat(droneAssessmentRegions).Distinct().ToList();
+
+            if (associatedRegions.Count > 0 && !associatedRegions.Any(r => userScopes.Contains(r)))
+            {
+                throw new ForbiddenException("DRONE_ACCESS_DENIED");
+            }
+        }
     }
 
     private async Task RequireTechnicianOrManager(CancellationToken ct)
