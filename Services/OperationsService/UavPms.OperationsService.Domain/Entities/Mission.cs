@@ -67,29 +67,80 @@ public class Mission : BaseEntity
 
     public void Start(DateTime? startTime = null)
     {
-        if(Status != MissionStatus.Ready)
+        if (Status != MissionStatus.Ready)
             throw new InvalidOperationException("MISSION_NOT_READY");
 
         Status = MissionStatus.InProgress;
         StartedAt = startTime ?? DateTime.UtcNow;
+        Version++;
+        UpdatedAt = DateTime.UtcNow;
     }
 
     public void Complete(DateTime? endTime = null)
     {
-        if(Status != MissionStatus.InProgress)
-            throw new InvalidOperationException($"Cannot complete mission with status {Status}.");
+        if (Status != MissionStatus.InProgress)
+            throw new InvalidOperationException($"Cannot complete mission with status {Status}. Mission must be InProgress.");
         
         Status = MissionStatus.Completed;
         EndedAt = endTime ?? DateTime.UtcNow;
+        Version++;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    public void Confirm(string? reason = null)
+    {
+        if (Status is MissionStatus.InProgress or MissionStatus.Completed or MissionStatus.Cancelled)
+            throw new InvalidOperationException($"Cannot confirm mission with status {Status}.");
+
+        Status = MissionStatus.Assigned;
+        AcceptedAt = DateTime.UtcNow;
+        Version++;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    public void Suspend(string reason)
+    {
+        if (Status is not (MissionStatus.Assigned or MissionStatus.Preparing or MissionStatus.Ready or MissionStatus.InProgress))
+            throw new InvalidOperationException($"Cannot suspend mission with status {Status}. Only active or preparing missions can be suspended.");
+
+        Status = MissionStatus.Suspended;
+        Version++;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    public void Resume(string? reason = null)
+    {
+        if (Status != MissionStatus.Suspended)
+            throw new InvalidOperationException($"Cannot resume mission with status {Status}. Only Suspended missions can be resumed.");
+
+        Status = StartedAt != null
+            ? MissionStatus.InProgress
+            : (RecalculateReadiness() ? MissionStatus.Ready : MissionStatus.Assigned);
+        Version++;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    public void Postpone(string reason)
+    {
+        if (Status is not (MissionStatus.PendingAcceptance or MissionStatus.Assigned or MissionStatus.Preparing or MissionStatus.Ready))
+            throw new InvalidOperationException($"Cannot postpone mission with status {Status}.");
+
+        Status = MissionStatus.Postponed;
+        PostponedAt = DateTime.UtcNow;
+        PostponeReason = reason;
+        Version++;
+        UpdatedAt = DateTime.UtcNow;
     }
 
     public void Cancel()
     {
-        if (Status is not (MissionStatus.Draft or MissionStatus.PendingAcceptance or MissionStatus.Assigned or MissionStatus.Preparing or MissionStatus.Ready))
+        if (Status is not (MissionStatus.Draft or MissionStatus.PendingAcceptance or MissionStatus.Assigned or MissionStatus.Preparing or MissionStatus.Ready or MissionStatus.Postponed or MissionStatus.Suspended))
             throw new InvalidOperationException($"Cannot cancel mission with status {Status}.");
         
         Status = MissionStatus.Cancelled;
         EndedAt = DateTime.UtcNow;
+        Version++;
+        UpdatedAt = DateTime.UtcNow;
     }
 
     public bool CheckAcceptance()
@@ -100,6 +151,8 @@ public class Mission : BaseEntity
         {
             Status = MissionStatus.Assigned;
             AcceptedAt = DateTime.UtcNow;
+            Version++;
+            UpdatedAt = DateTime.UtcNow;
             return true;
         }
         return false;
@@ -107,7 +160,9 @@ public class Mission : BaseEntity
 
     public bool RecalculateReadiness()
     {
-        if (Status is MissionStatus.Cancelled or MissionStatus.Completed or MissionStatus.InProgress or MissionStatus.PendingAcceptance) return false;
+        if (Status is MissionStatus.Cancelled or MissionStatus.Completed or MissionStatus.InProgress or MissionStatus.PendingAcceptance or MissionStatus.Suspended or MissionStatus.Postponed)
+            return false;
+
         var active = Assignments.Where(x => x.Status == MissionAssignmentStatus.Active).ToList();
         var hasUav = UavId.HasValue && UavId.Value != Guid.Empty;
         var ready = active.Count > 0
@@ -115,6 +170,7 @@ public class Mission : BaseEntity
             && hasUav
             && MissionTargets.Count > 0
             && DroneHandovers.Any(h => h.DroneId == UavId!.Value && h.Status == DroneHandoverStatus.Accepted && h.ReturnedAt == null);
+
         Status = ready
             ? MissionStatus.Ready
             : active.Count > 0 && hasUav
