@@ -11,6 +11,7 @@ using UavPms.Shared.Contracts.Constants;
 
 namespace UavPms.OperationsService.Application.Features.Missions.Commands.CreateMission;
 
+[Obsolete("Direct mission creation via CreateMissionCommandHandler is deprecated. Missions must be created through PreMissionAssessment workflow.")]
 public class CreateMissionCommandHandler : IRequestHandler<CreateMissionCommand, MissionDto>
 {
     private readonly IMissionRepository _missionRepository;

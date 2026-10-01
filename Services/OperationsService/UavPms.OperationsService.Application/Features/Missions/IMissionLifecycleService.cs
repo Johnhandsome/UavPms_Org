@@ -17,6 +17,7 @@ public record Mf01Handover(Guid DroneId, Guid ReceivedBy, string Condition, bool
 
 public interface IMissionLifecycleService
 {
+    [Obsolete("Use PreMissionAssessmentService.CreateMissionFromAssessmentAsync instead.")]
     Task<Mission> CreateAsync(Mf01CreateMission request, CancellationToken ct);
     Task<IReadOnlyList<Asset>> ResolveScopeAsync(Guid missionId, string boundaryWkt, CancellationToken ct);
     Task ConfirmAssetsAsync(Guid missionId, string boundaryWkt, IReadOnlyCollection<Guid> assetIds, CancellationToken ct);
