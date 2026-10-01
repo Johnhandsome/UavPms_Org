@@ -622,14 +622,14 @@ public sealed class PreMissionAssessmentService
         _db.OutboxMessages.Add(new OutboxMessage
         {
             MessageType = "MissionCreatedFromAssessment",
-            Payload = JsonSerializer.Serialize(new
+            Payload = JsonSerializer.Serialize(new MissionCreatedFromAssessmentEvent
             {
                 MissionId = mission.Id,
                 AssessmentId = assessment.Id,
                 ManagerId = _current.UserId,
                 Title = mission.Title,
-                PlannedStart = mission.PlannedStart,
-                PlannedEnd = mission.PlannedEnd,
+                PlannedStart = mission.PlannedStart ?? assessment.PlannedStart,
+                PlannedEnd = mission.PlannedEnd ?? assessment.PlannedEnd,
                 PersonnelCount = request.Personnel.Count,
                 DroneCount = request.DroneIds.Count
             }),
@@ -688,19 +688,21 @@ public sealed class PreMissionAssessmentService
         if (assessment.Status == PreMissionAssessmentStatus.Completed || assessment.ConsumedByMissionId.HasValue)
             throw new BusinessRuleException("ASSESSMENT_ALREADY_COMPLETED");
 
-        if (assessment.Status is PreMissionAssessmentStatus.Expired or PreMissionAssessmentStatus.Cancelled)
-            throw new BusinessRuleException("INVALID_ASSESSMENT_STATUS", "Bản đánh giá đã hết hạn hoặc đã bị hủy, không thể đánh dấu hoàn thành.");
+        if (assessment.Status != PreMissionAssessmentStatus.Ready)
+            throw new BusinessRuleException("INVALID_ASSESSMENT_STATUS", "Chỉ bản đánh giá ở trạng thái READY mới có thể đánh dấu hoàn thành.");
 
-        if (missionId.HasValue && missionId.Value != Guid.Empty)
+        if (!missionId.HasValue || missionId.Value == Guid.Empty)
+            throw new BusinessRuleException("MISSION_REQUIRED", "Cần cung cấp mã nhiệm vụ hợp lệ để hoàn tất bản đánh giá.");
+
+        var mission = await _db.Missions.SingleOrDefaultAsync(m => m.Id == missionId.Value, ct)
+            ?? throw new NotFoundException("Mission", missionId.Value);
+
+        if (mission.PreMissionAssessmentId != assessmentId)
         {
-            var mission = await _db.Missions.SingleOrDefaultAsync(m => m.Id == missionId.Value, ct);
-            if (mission != null && mission.PreMissionAssessmentId != assessmentId)
-            {
-                throw new BusinessRuleException("INVALID_MISSION_REFERENCE", "Nhiệm vụ được tham chiếu không thuộc về bản đánh giá này.");
-            }
-            assessment.ConsumedByMissionId = missionId.Value;
+            throw new BusinessRuleException("INVALID_MISSION_REFERENCE", "Nhiệm vụ được tham chiếu không thuộc về bản đánh giá này.");
         }
 
+        assessment.ConsumedByMissionId = mission.Id;
         assessment.Status = PreMissionAssessmentStatus.Completed;
         assessment.Version++;
 

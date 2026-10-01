@@ -433,10 +433,19 @@ public class PreMissionAssessmentServiceTests
             Status = PreMissionAssessmentStatus.Ready
         };
         db.PreMissionAssessments.Add(assessment);
+
+        var missionId = Guid.NewGuid();
+        var mission = new Mission
+        {
+            Id = missionId,
+            MissionCode = "MS-VALID-01",
+            Title = "Valid Mission",
+            PreMissionAssessmentId = assessment.Id
+        };
+        db.Missions.Add(mission);
         await db.SaveChangesAsync();
 
         var service = new PreMissionAssessmentService(db, user.Object);
-        var missionId = Guid.NewGuid();
 
         var result = await service.MarkCompletedAsync(assessment.Id, missionId, CancellationToken.None);
 
@@ -444,6 +453,91 @@ public class PreMissionAssessmentServiceTests
         result.Status.Should().Be(PreMissionAssessmentStatus.Completed);
         result.ConsumedByMissionId.Should().Be(missionId);
         result.Version.Should().Be(2);
+    }
+
+    [Fact]
+    public async Task MarkCompletedAsync_MissionNotFound_ThrowsNotFoundException()
+    {
+        var managerId = Guid.NewGuid();
+        var user = CreateUserMock(managerId, UserRoles.Manager);
+        await using var db = CreateContext(user.Object);
+
+        db.Users.Add(new User { Id = managerId, Status = "Active" });
+        var region = new Region { Id = Guid.NewGuid(), Code = "REG-01" };
+        db.Regions.Add(region);
+
+        var assessment = new PreMissionAssessment
+        {
+            ManagerId = managerId,
+            RegionId = region.Id,
+            PlannedStart = DateTime.UtcNow.AddDays(1),
+            PlannedEnd = DateTime.UtcNow.AddDays(1).AddHours(4),
+            Status = PreMissionAssessmentStatus.Ready
+        };
+        db.PreMissionAssessments.Add(assessment);
+        await db.SaveChangesAsync();
+
+        var service = new PreMissionAssessmentService(db, user.Object);
+        var randomMissionId = Guid.NewGuid();
+
+        var act = () => service.MarkCompletedAsync(assessment.Id, randomMissionId, CancellationToken.None);
+        await act.Should().ThrowAsync<NotFoundException>();
+    }
+
+    [Fact]
+    public async Task MarkCompletedAsync_MissingMissionId_ThrowsBusinessRuleException()
+    {
+        var managerId = Guid.NewGuid();
+        var user = CreateUserMock(managerId, UserRoles.Manager);
+        await using var db = CreateContext(user.Object);
+
+        db.Users.Add(new User { Id = managerId, Status = "Active" });
+        var region = new Region { Id = Guid.NewGuid(), Code = "REG-01" };
+        db.Regions.Add(region);
+
+        var assessment = new PreMissionAssessment
+        {
+            ManagerId = managerId,
+            RegionId = region.Id,
+            PlannedStart = DateTime.UtcNow.AddDays(1),
+            PlannedEnd = DateTime.UtcNow.AddDays(1).AddHours(4),
+            Status = PreMissionAssessmentStatus.Ready
+        };
+        db.PreMissionAssessments.Add(assessment);
+        await db.SaveChangesAsync();
+
+        var service = new PreMissionAssessmentService(db, user.Object);
+
+        var act = () => service.MarkCompletedAsync(assessment.Id, null, CancellationToken.None);
+        await act.Should().ThrowAsync<BusinessRuleException>().WithMessage("*MISSION_REQUIRED*");
+    }
+
+    [Fact]
+    public async Task MarkCompletedAsync_DraftAssessment_ThrowsBusinessRuleException()
+    {
+        var managerId = Guid.NewGuid();
+        var user = CreateUserMock(managerId, UserRoles.Manager);
+        await using var db = CreateContext(user.Object);
+
+        db.Users.Add(new User { Id = managerId, Status = "Active" });
+        var region = new Region { Id = Guid.NewGuid(), Code = "REG-01" };
+        db.Regions.Add(region);
+
+        var assessment = new PreMissionAssessment
+        {
+            ManagerId = managerId,
+            RegionId = region.Id,
+            PlannedStart = DateTime.UtcNow.AddDays(1),
+            PlannedEnd = DateTime.UtcNow.AddDays(1).AddHours(4),
+            Status = PreMissionAssessmentStatus.Draft
+        };
+        db.PreMissionAssessments.Add(assessment);
+        await db.SaveChangesAsync();
+
+        var service = new PreMissionAssessmentService(db, user.Object);
+
+        var act = () => service.MarkCompletedAsync(assessment.Id, Guid.NewGuid(), CancellationToken.None);
+        await act.Should().ThrowAsync<BusinessRuleException>().WithMessage("*INVALID_ASSESSMENT_STATUS*");
     }
 
     [Fact]
