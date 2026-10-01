@@ -101,7 +101,8 @@ public class GlobalExceptionHandler : IExceptionHandler
             var isConflict = code is "INVALID_MISSION_STATE"
                 or "RESOURCE_BOOKING_CONFLICT"
                 or "MISSION_CONCURRENCY_CONFLICT"
-                or "ASSESSMENT_CONCURRENCY_CONFLICT";
+                or "ASSESSMENT_CONCURRENCY_CONFLICT"
+                or "IDEMPOTENCY_CONFLICT";
 
             httpContext.Response.StatusCode = isConflict ? (int)HttpStatusCode.Conflict : (int)HttpStatusCode.BadRequest;
             apiResponse = new ApiResponse(

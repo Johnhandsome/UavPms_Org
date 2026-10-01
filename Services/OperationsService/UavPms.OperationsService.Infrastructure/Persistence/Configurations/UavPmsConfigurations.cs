@@ -189,6 +189,7 @@ public class UavConfiguration : IEntityTypeConfiguration<Uav>
         builder.Property(e => e.Status).HasConversion<string>();
         builder.Property(e => e.OperationalStatus).HasConversion<string>();
         builder.Property(e => e.TechnicalHealth).HasConversion<string>();
+        builder.Property(e => e.Version).IsConcurrencyToken();
     }
 }
 
@@ -311,6 +312,7 @@ public class PreMissionAssessmentConfiguration : IEntityTypeConfiguration<PreMis
         builder.Property(x => x.OverallTechnicalHealth).HasConversion<string>();
         builder.Property(x => x.Findings).HasColumnType("jsonb");
         builder.Property(x => x.ProposedBoundary).HasColumnType("geometry(Geometry,4326)");
+        builder.HasIndex(x => x.ProposedBoundary).HasMethod("gist");
         builder.Property(x => x.Version).IsConcurrencyToken();
         builder.HasIndex(x => new { x.ManagerId, x.Status });
         builder.HasIndex(x => x.IdempotencyKey).IsUnique().HasFilter("\"IdempotencyKey\" IS NOT NULL AND NOT \"IsDeleted\"");

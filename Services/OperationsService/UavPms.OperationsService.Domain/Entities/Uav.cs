@@ -18,6 +18,7 @@ public class Uav : BaseEntity
     public double BatteryLevel { get; set; }
     public Point? CurrentLocation { get; set; }
     public DateTime? LastMaintenanceAt { get; set; }
+    public uint Version { get; set; }
 
     public virtual ICollection<Mission> Missions { get; set; } = new List<Mission>();
     public virtual ICollection<DroneTechnicalInspection> TechnicalInspections { get; set; } = new List<DroneTechnicalInspection>();
