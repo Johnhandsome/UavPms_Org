@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using NetTopologySuite.Geometries;
@@ -508,7 +509,7 @@ public sealed class PreMissionAssessmentService
         // Gap #11: Mission starts at PendingAcceptance
         var mission = new Mission
         {
-            MissionCode = $"MS-{DateTime.UtcNow:yyyyMMddHHmmssfff}",
+            MissionCode = $"MS-{DateTime.UtcNow:yyyyMMddHHmmssfff}-{RandomNumberGenerator.GetInt32(100, 1000)}",
             Title = request.Title,
             Description = request.Description ?? string.Empty,
             ManagerId = _current.UserId,

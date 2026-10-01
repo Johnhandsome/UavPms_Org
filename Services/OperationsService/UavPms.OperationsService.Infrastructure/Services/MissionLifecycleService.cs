@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using NetTopologySuite.Geometries;
@@ -49,6 +50,7 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
         return null;
     }
 
+    [Obsolete("Use PreMissionAssessmentService.CreateMissionFromAssessmentAsync instead.")]
     public async Task<Mission> CreateAsync(Mf01CreateMission request, CancellationToken ct)
     {
         await RequireActiveCaller(ct); await RequireManageRegion(request.RegionId, ct);
@@ -81,6 +83,11 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
             {
                 resolvedAssignedUserId = resolvedAssignments[0].UserId;
             }
+        }
+
+        if (!resolvedAssignedUserId.HasValue || resolvedAssignedUserId.Value == Guid.Empty)
+        {
+            throw new BusinessRuleException("INSPECTOR_REQUIRED", "Assigned inspector or pilot is required for mission creation.");
         }
 
         if (request.PreMissionAssessmentId.HasValue)
@@ -198,7 +205,7 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
         var status = request.ConfirmationDeadline.HasValue ? MissionStatus.PendingAcceptance : MissionStatus.Draft;
         var mission = new Mission
         {
-            MissionCode = $"MS-{DateTime.UtcNow:yyyyMMddHHmmssfff}",
+            MissionCode = $"MS-{DateTime.UtcNow:yyyyMMddHHmmssfff}-{RandomNumberGenerator.GetInt32(100, 1000)}",
             Title = request.Title,
             RegionId = request.RegionId,
             ScheduleId = request.ScheduleId,
@@ -456,8 +463,61 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
         var mission = await ManagedMission(missionId, ct, true); RequirePreExecution(mission);
         var drone = await _db.Uavs.SingleOrDefaultAsync(x => x.Id == droneId, ct) ?? throw new NotFoundException("Drone", droneId);
         if (drone.Status != DroneStatus.Idle && mission.UavId != droneId) throw new BusinessRuleException("DRONE_UNAVAILABLE");
-        if (await _db.Missions.AnyAsync(x => x.Id != missionId && x.UavId == droneId && x.Status != MissionStatus.Completed && x.Status != MissionStatus.Cancelled, ct))
-            throw new BusinessRuleException("DRONE_ALREADY_RESERVED");
+
+        var plannedStart = mission.PlannedStart ?? mission.ScheduledStartAt;
+        var plannedEnd = mission.PlannedEnd ?? (plannedStart.HasValue ? plannedStart.Value.AddHours(2) : (DateTime?)null);
+
+        if (plannedStart.HasValue && plannedEnd.HasValue)
+        {
+            var conflictingDroneBooking = await _db.ResourceBookings
+                .Include(b => b.Mission)
+                .Where(b => b.DroneId == droneId &&
+                            b.MissionId != missionId &&
+                            b.Status == ResourceBookingStatus.Active &&
+                            b.StartAt < plannedEnd.Value &&
+                            b.EndAt > plannedStart.Value)
+                .FirstOrDefaultAsync(ct);
+            if (conflictingDroneBooking != null)
+            {
+                throw new BusinessRuleException("RESOURCE_BOOKING_CONFLICT",
+                    $"Drone {droneId} is already booked in mission '{conflictingDroneBooking.Mission?.MissionCode ?? conflictingDroneBooking.MissionId.ToString()}' ({conflictingDroneBooking.StartAt:yyyy-MM-dd HH:mm} - {conflictingDroneBooking.EndAt:yyyy-MM-dd HH:mm}).");
+            }
+
+            var existingDroneBooking = await _db.ResourceBookings
+                .FirstOrDefaultAsync(b => b.MissionId == missionId && b.DroneId.HasValue && b.Status == ResourceBookingStatus.Active, ct);
+            if (existingDroneBooking != null)
+            {
+                if (existingDroneBooking.DroneId != droneId)
+                {
+                    existingDroneBooking.Status = ResourceBookingStatus.Cancelled;
+                    _db.ResourceBookings.Add(new ResourceBooking
+                    {
+                        MissionId = missionId,
+                        DroneId = droneId,
+                        StartAt = plannedStart.Value,
+                        EndAt = plannedEnd.Value,
+                        Status = ResourceBookingStatus.Active
+                    });
+                }
+            }
+            else
+            {
+                _db.ResourceBookings.Add(new ResourceBooking
+                {
+                    MissionId = missionId,
+                    DroneId = droneId,
+                    StartAt = plannedStart.Value,
+                    EndAt = plannedEnd.Value,
+                    Status = ResourceBookingStatus.Active
+                });
+            }
+        }
+        else
+        {
+            if (await _db.Missions.AnyAsync(x => x.Id != missionId && x.UavId == droneId && x.Status != MissionStatus.Completed && x.Status != MissionStatus.Cancelled, ct))
+                throw new BusinessRuleException("DRONE_ALREADY_RESERVED");
+        }
+
         var replaced = mission.UavId != Guid.Empty && mission.UavId != droneId; mission.UavId = droneId; mission.RecalculateReadiness();
         Audit(mission.Id, replaced ? "DRONE_REPLACED" : "DRONE_ASSIGNED"); await _db.SaveChangesAsync(ct);
     }
@@ -518,6 +578,10 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
         assignment.RespondedAt = DateTime.UtcNow;
         assignment.Version++;
 
+        // H6: Always update mission version to ensure atomic optimistic concurrency token check
+        mission.Version++;
+        mission.UpdatedAt = DateTime.UtcNow;
+
         var allConfirmed = false;
         if (mission.Status == MissionStatus.PendingAcceptance)
         {
@@ -533,7 +597,7 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
         }
 
         Audit(mission.Id, "ASSIGNMENT_ACCEPTED");
-        await _db.SaveChangesAsync(ct);
+        await SaveConcurrency(ct);
 
         if (allConfirmed && _notifier != null)
         {
@@ -580,37 +644,51 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
         return assignment;
     }
 
-    public async Task StartAsync(Guid missionId, CancellationToken ct) { var m = await AccessibleMission(missionId, ct, true); m.Start(); m.Version++; Audit(m.Id, "MISSION_STARTED"); await SaveConcurrency(ct); }
-    public async Task CompleteAsync(Guid missionId, CancellationToken ct) { var m = await AccessibleMission(missionId, ct, true); m.Complete(); m.Version++; Audit(m.Id, "MISSION_COMPLETED"); await SaveConcurrency(ct); }
-    public async Task CancelAsync(Guid missionId, CancellationToken ct)
+    public async Task StartAsync(Guid missionId, CancellationToken ct)
     {
-        var m = await ManagedMission(missionId, ct, true);
-        m.Cancel();
-        m.Version++;
-
-        var bookings = await _db.ResourceBookings
-            .Where(b => b.MissionId == missionId && b.Status == ResourceBookingStatus.Active)
-            .ToListAsync(ct);
-        foreach (var b in bookings)
+        var m = await AccessibleMission(missionId, ct, true);
+        try
         {
-            b.Status = ResourceBookingStatus.Cancelled;
+            m.Start();
         }
-
-        Audit(m.Id, "MISSION_CANCELLED");
-        foreach (var a in m.Assignments.Where(x => x.Status == MissionAssignmentStatus.Active))
-            Notify(a.UserId, m, "MISSION_CANCELLED");
-
+        catch (InvalidOperationException ex)
+        {
+            throw new BusinessRuleException("INVALID_MISSION_STATE", ex.Message);
+        }
+        Audit(m.Id, "MISSION_STARTED");
         await SaveConcurrency(ct);
     }
+
+    public async Task CompleteAsync(Guid missionId, CancellationToken ct)
+    {
+        var m = await AccessibleMission(missionId, ct, true);
+        try
+        {
+            m.Complete();
+        }
+        catch (InvalidOperationException ex)
+        {
+            throw new BusinessRuleException("INVALID_MISSION_STATE", ex.Message);
+        }
+        Audit(m.Id, "MISSION_COMPLETED");
+        await SaveConcurrency(ct);
+    }
+
+    [Obsolete("Use CancelMissionAsync instead.")]
+    public Task CancelAsync(Guid missionId, CancellationToken ct) => CancelMissionAsync(missionId, null, ct);
 
     public async Task<Mission> ConfirmMissionAsync(Guid missionId, string? reason, CancellationToken ct)
     {
         await RequireActiveCaller(ct);
         var mission = await AccessibleMission(missionId, ct, true);
-
-        mission.Status = MissionStatus.Assigned;
-        mission.AcceptedAt = DateTime.UtcNow;
-        mission.Version++;
+        try
+        {
+            mission.Confirm(reason);
+        }
+        catch (InvalidOperationException ex)
+        {
+            throw new BusinessRuleException("INVALID_MISSION_STATE", ex.Message);
+        }
 
         foreach (var a in mission.Assignments.Where(x => x.UserId == _current.UserId && x.Status == MissionAssignmentStatus.Active))
         {
@@ -681,8 +759,14 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
         await RequireActiveCaller(ct);
         var mission = await ManagedMission(missionId, ct, true);
 
-        mission.Status = MissionStatus.Suspended;
-        mission.Version++;
+        try
+        {
+            mission.Suspend(reason);
+        }
+        catch (InvalidOperationException ex)
+        {
+            throw new BusinessRuleException("INVALID_MISSION_STATE", ex.Message);
+        }
 
         Audit(mission.Id, "MISSION_SUSPENDED");
         if (mission.InspectorId != Guid.Empty)
@@ -750,10 +834,14 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
         await RequireActiveCaller(ct);
         var mission = await ManagedMission(missionId, ct, true);
 
-        mission.Status = mission.StartedAt != null
-            ? MissionStatus.InProgress
-            : (mission.RecalculateReadiness() ? MissionStatus.Ready : MissionStatus.Assigned);
-        mission.Version++;
+        try
+        {
+            mission.Resume(reason);
+        }
+        catch (InvalidOperationException ex)
+        {
+            throw new BusinessRuleException("INVALID_MISSION_STATE", ex.Message);
+        }
 
         Audit(mission.Id, "MISSION_RESUMED");
         if (mission.InspectorId != Guid.Empty)
@@ -824,10 +912,14 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
 
         var mission = await AccessibleMission(missionId, ct, true);
 
-        mission.Status = MissionStatus.Postponed;
-        mission.PostponedAt = DateTime.UtcNow;
-        mission.PostponeReason = reason;
-        mission.Version++;
+        try
+        {
+            mission.Postpone(reason);
+        }
+        catch (InvalidOperationException ex)
+        {
+            throw new BusinessRuleException("INVALID_MISSION_STATE", ex.Message);
+        }
 
         foreach (var a in mission.Assignments.Where(x => x.UserId == _current.UserId && x.Status == MissionAssignmentStatus.Active))
         {
@@ -893,8 +985,14 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
     public async Task<Mission> CancelMissionAsync(Guid missionId, string? reason, CancellationToken ct)
     {
         var mission = await ManagedMission(missionId, ct, true);
-        mission.Cancel();
-        mission.Version++;
+        try
+        {
+            mission.Cancel();
+        }
+        catch (InvalidOperationException ex)
+        {
+            throw new BusinessRuleException("INVALID_MISSION_STATE", ex.Message);
+        }
 
         var bookings = await _db.ResourceBookings
             .Where(b => b.MissionId == missionId && b.Status == ResourceBookingStatus.Active)
@@ -1317,7 +1415,7 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
                 var ticket = new MaintenanceTicket
                 {
                     Id = Guid.NewGuid(),
-                    TicketCode = $"TKT-{DateTime.UtcNow:yyyyMMdd}-{new Random().Next(1000, 9999)}",
+                    TicketCode = $"TKT-{DateTime.UtcNow:yyyyMMdd}-{RandomNumberGenerator.GetInt32(1000, 10000)}",
                     AnomalyId = anomaly.Id,
                     AssetId = anomaly.AssetId ?? Guid.Empty,
                     ManagerId = mission.ManagerId,
@@ -1469,13 +1567,48 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
         }
 
         var actorName = _current.Username ?? "Thành viên";
-        var senderRole = !string.IsNullOrWhiteSpace(request.SenderRole)
-            ? request.SenderRole.ToUpperInvariant()
-            : (_current.Roles.Contains(UserRoles.Inspector, StringComparer.OrdinalIgnoreCase)
-                ? "INSPECTOR"
-                : (_current.Roles.Contains(UserRoles.Analyst, StringComparer.OrdinalIgnoreCase)
-                    ? "ANALYST"
-                    : (_current.Roles.Contains(UserRoles.Manager, StringComparer.OrdinalIgnoreCase) ? "MANAGER" : "SYSTEM")));
+        var userAssignment = mission.Assignments.FirstOrDefault(a => a.UserId == _current.UserId && a.Status == MissionAssignmentStatus.Active);
+
+        // Resolve actual valid role for caller
+        string actualRole;
+        if (mission.ManagerId == _current.UserId || _current.Roles.Contains(UserRoles.Manager, StringComparer.OrdinalIgnoreCase))
+        {
+            actualRole = "MANAGER";
+        }
+        else if (userAssignment != null && !string.IsNullOrWhiteSpace(userAssignment.AssignmentRole))
+        {
+            actualRole = userAssignment.AssignmentRole.ToUpperInvariant();
+        }
+        else if (_current.Roles.Contains(UserRoles.Inspector, StringComparer.OrdinalIgnoreCase))
+        {
+            actualRole = "INSPECTOR";
+        }
+        else if (_current.Roles.Contains(UserRoles.Analyst, StringComparer.OrdinalIgnoreCase))
+        {
+            actualRole = "ANALYST";
+        }
+        else if (_current.Roles.Contains(UserRoles.Technician, StringComparer.OrdinalIgnoreCase) ||
+                 _current.Roles.Contains(UserRoles.MaintenanceTechnician, StringComparer.OrdinalIgnoreCase))
+        {
+            actualRole = "TECHNICIAN";
+        }
+        else
+        {
+            actualRole = "MEMBER";
+        }
+
+        // Only allow client-specified SenderRole if user actually holds that role
+        var senderRole = actualRole;
+        if (!string.IsNullOrWhiteSpace(request.SenderRole))
+        {
+            var requestedRole = request.SenderRole.Trim().ToUpperInvariant();
+            if (string.Equals(requestedRole, actualRole, StringComparison.OrdinalIgnoreCase) ||
+                _current.Roles.Contains(requestedRole, StringComparer.OrdinalIgnoreCase) ||
+                (userAssignment != null && string.Equals(userAssignment.AssignmentRole, requestedRole, StringComparison.OrdinalIgnoreCase)))
+            {
+                senderRole = requestedRole;
+            }
+        }
 
         var commLog = new MissionCommunicationLog
         {
@@ -1536,11 +1669,7 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
     public async Task<MissionAssignmentsOverviewDto> GetAssignmentsOverviewAsync(Guid missionId, CancellationToken ct)
     {
         await RequireActiveCaller(ct);
-        var mission = await _db.Missions
-            .Include(m => m.Assignments)
-                .ThenInclude(a => a.User)
-            .SingleOrDefaultAsync(m => m.Id == missionId && !m.IsDeleted, ct)
-            ?? throw new NotFoundException("Mission", missionId);
+        var mission = await AccessibleMission(missionId, ct, false);
 
         var activeAssignments = mission.Assignments
             .Where(a => a.Status == MissionAssignmentStatus.Active && !a.IsDeleted)
@@ -1661,11 +1790,25 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
         await RequireActiveCaller(ct);
         var global = IsGlobal;
         var uid = _current.UserId;
-        var isAnalyst = _current.Roles.Contains(UserRoles.Analyst, StringComparer.OrdinalIgnoreCase);
-        var m = await MissionQuery(graph).SingleOrDefaultAsync(x => x.Id == id && (global || isAnalyst || x.ManagerId == uid || (x.InspectorId.HasValue && x.InspectorId.Value == uid) || x.Assignments.Any(a => a.UserId == uid && a.Status == MissionAssignmentStatus.Active)), ct);
+        var userRegionScopes = await _db.UserGeographicScopes
+            .Where(x => x.UserId == uid)
+            .Select(x => x.RegionId)
+            .ToListAsync(ct);
+
+        var m = await MissionQuery(graph).SingleOrDefaultAsync(x => x.Id == id && (
+            global ||
+            x.ManagerId == uid ||
+            (x.InspectorId.HasValue && x.InspectorId.Value == uid) ||
+            x.Assignments.Any(a => a.UserId == uid && a.Status == MissionAssignmentStatus.Active) ||
+            userRegionScopes.Contains(x.RegionId)
+        ), ct);
         return m ?? throw new ForbiddenException("MISSION_ACCESS_DENIED");
     }
-    private IQueryable<Mission> MissionQuery(bool graph) { var q = _db.Missions.Include(x => x.Assignments).AsQueryable(); return graph ? q.Include(x => x.CheckIns).Include(x => x.DroneHandovers).Include(x => x.MissionTargets) : q; }
+    private IQueryable<Mission> MissionQuery(bool graph)
+    {
+        var q = _db.Missions.Include(x => x.Assignments).ThenInclude(a => a.User).AsQueryable();
+        return graph ? q.Include(x => x.CheckIns).Include(x => x.DroneHandovers).Include(x => x.MissionTargets) : q;
+    }
     private async Task RequireManageMission(Guid id, CancellationToken ct) { var region = await _db.Missions.Where(x => x.Id == id).Select(x => x.RegionId).SingleOrDefaultAsync(ct) ?? throw new BusinessRuleException("MISSION_REGION_REQUIRED"); await RequireManageRegion(region, ct); }
     private async Task RequireManageRegion(Guid region, CancellationToken ct) { if (IsGlobal) return; if (!_current.Roles.Contains(UserRoles.Manager, StringComparer.OrdinalIgnoreCase) || !await _db.UserGeographicScopes.AnyAsync(x => x.UserId == _current.UserId && x.RegionId == region, ct)) throw new ForbiddenException("REGION_MANAGEMENT_SCOPE_REQUIRED"); }
     private async Task RequireActiveCaller(CancellationToken ct) { if (!_current.IsAuthenticated || _current.UserId == Guid.Empty) throw new ForbiddenException("AUTHENTICATION_REQUIRED"); var user = await _db.Users.SingleOrDefaultAsync(x => x.Id == _current.UserId, ct); if (user == null || !IsActive(user.Status)) throw new ForbiddenException("ACTIVE_USER_REQUIRED"); }
@@ -1673,15 +1816,60 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
     private static bool IsActive(string status) => status.Equals("Active", StringComparison.OrdinalIgnoreCase) || status.Equals("Enabled", StringComparison.OrdinalIgnoreCase);
     private static void RequirePreExecution(Mission m) { if (m.Status is MissionStatus.InProgress or MissionStatus.Completed or MissionStatus.Cancelled) throw new BusinessRuleException("MISSION_IMMUTABLE_AFTER_START"); }
     private void Audit(Guid id, string action, string oldValues = "{}", string newValues = "{}") => _db.AuditLogs.Add(new AuditLog { UserId = _current.UserId, TableName = "Missions", RecordId = id, ActionType = action, OldValues = oldValues, NewValues = newValues, IpAddress = _current.IpAddress ?? "", UserAgent = _current.UserAgent ?? "" });
-    private void Notify(Guid userId, Mission m, string type, string? role = null)
+    private static (string Title, string Body) GetNotificationContent(string type, Mission m, string? role)
     {
         var roleText = !string.IsNullOrWhiteSpace(role) ? $"vai trò {role}" : "nhiệm vụ";
         var deadlineText = m.ConfirmationDeadline.HasValue 
-            ? $" Hạn chót xác nhận: {m.ConfirmationDeadline.Value:dd/MM/yyyy HH:mm}." 
+            ? $" Hạn chót xác nhận: {m.ConfirmationDeadline.Value:dd/MM/yyyy HH:mm} (UTC)." 
             : string.Empty;
         var instructionsText = !string.IsNullOrWhiteSpace(m.ManagerInstructions)
             ? $" Lời dặn: \"{m.ManagerInstructions}\""
             : string.Empty;
+
+        return type switch
+        {
+            "MISSION_CANCELLED" => (
+                $"[HỦY NHIỆM VỤ] {m.MissionCode} đã bị hủy",
+                $"Nhiệm vụ \"{m.Title}\" ({m.MissionCode}) đã bị hủy bỏ bởi điều phối viên."
+            ),
+            "MISSION_SUSPENDED" => (
+                $"[ĐÌNH CHỈ BAY] Lệnh tạm đình chỉ bay khẩn cấp: {m.MissionCode}",
+                $"Nhiệm vụ \"{m.Title}\" ({m.MissionCode}) đã bị tạm đình chỉ. Tất cả hoạt động bay phải dừng ngay lập tức."
+            ),
+            "MISSION_RESUMED" => (
+                $"[TIẾP TỤC BAY] Nhiệm vụ {m.MissionCode} đã được kích hoạt lại",
+                $"Nhiệm vụ \"{m.Title}\" ({m.MissionCode}) đã được quản lý cho phép tiếp tục hoạt động."
+            ),
+            "MISSION_POSTPONED" => (
+                $"[HOÃN NHIỆM VỤ] Toàn bộ nhiệm vụ {m.MissionCode} đã hoãn lịch",
+                $"Nhiệm vụ \"{m.Title}\" ({m.MissionCode}) đã bị hoãn bởi quản lý.{(!string.IsNullOrWhiteSpace(m.PostponeReason) ? $" Lý do: {m.PostponeReason}." : "")}"
+            ),
+            "ASSIGNMENT_POSTPONED" => (
+                $"[XIN HOÃN PHÂN CÔNG] Nhân sự xin hoãn nhận nhiệm vụ: {m.MissionCode}",
+                $"Có nhân sự xin hoãn phân công trong nhiệm vụ \"{m.Title}\" ({m.MissionCode}). Vui lòng xem xét điều phối lại."
+            ),
+            "MISSION_CONFIRMED" => (
+                $"[ĐÃ XÁC NHẬN] Nhiệm vụ {m.MissionCode} đã sẵn sàng",
+                $"Tất cả nhân sự bắt buộc đã xác nhận tiếp nhận nhiệm vụ \"{m.Title}\" ({m.MissionCode})."
+            ),
+            "MISSION_ASSIGNMENT_REMOVED" => (
+                $"[THU HỒI PHÂN CÔNG] Thu hồi phân công nhiệm vụ {m.MissionCode}",
+                $"Phân công {roleText} của bạn cho nhiệm vụ \"{m.Title}\" ({m.MissionCode}) đã bị thu hồi."
+            ),
+            "MISSION_REMINDER" => (
+                $"[NHẮC NHỞ] Hạn chót xác nhận nhiệm vụ: {m.MissionCode}",
+                $"Nhắc nhở: Vui lòng xác nhận tiếp nhận {roleText} cho nhiệm vụ \"{m.Title}\".{deadlineText}"
+            ),
+            _ => (
+                $"[MF02 ĐIỀU PHỐI] Yêu cầu xác nhận nhiệm vụ: {m.MissionCode}",
+                $"Bạn được phân công tham gia {roleText} cho nhiệm vụ \"{m.Title}\".{deadlineText}{instructionsText}"
+            )
+        };
+    }
+
+    private void Notify(Guid userId, Mission m, string type, string? role = null)
+    {
+        var (title, body) = GetNotificationContent(type, m, role);
 
         _db.Notifications.Add(new Notification
         {
@@ -1689,8 +1877,8 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
             Type = type == "MISSION_DISPATCHED" ? "MISSION_DISPATCH" : type,
             ReferenceType = "MISSION",
             ReferenceId = m.Id,
-            Title = $"[MF02 ĐIỀU PHỐI] Yêu cầu xác nhận nhiệm vụ: {m.MissionCode}",
-            Body = $"Bạn được phân công tham gia {roleText} cho nhiệm vụ \"{m.Title}\".{deadlineText}{instructionsText}",
+            Title = title,
+            Body = body,
             IsRead = false,
             SentAt = DateTime.UtcNow
         });

@@ -111,7 +111,7 @@ public class MissionCreatedConsumer : BackgroundService
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, "Error processing MissionCreatedEvent");
-                    await _channel.BasicNackAsync(ea.DeliveryTag, false, true);
+                    await _channel.BasicNackAsync(ea.DeliveryTag, false, false);
                 }
             };
 
