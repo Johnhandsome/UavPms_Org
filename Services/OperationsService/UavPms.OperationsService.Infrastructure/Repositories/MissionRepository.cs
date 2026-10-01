@@ -88,12 +88,13 @@ public class MissionRepository : GenericRepository<Mission>, IMissionRepository
     public async Task<IReadOnlyList<Mission>> GetMissionsByAssignedUserAsync(Guid userId)
     {
         return await _context.Missions
+            .AsNoTracking()
             .Include(m => m.Inspector)
             .Include(m => m.Manager)
             .Include(m => m.Uav)
             .Include(m => m.Region)
-            .Include(m => m.Assignments).ThenInclude(a => a.User)
-            .Where(m => (m.InspectorId.HasValue && m.InspectorId.Value == userId) || m.Assignments.Any(a => a.UserId == userId) || m.ManagerId == userId)
+            .Include(m => m.Assignments.Where(a => a.Status == MissionAssignmentStatus.Active)).ThenInclude(a => a.User)
+            .Where(m => (m.InspectorId.HasValue && m.InspectorId.Value == userId) || m.Assignments.Any(a => a.UserId == userId && a.Status == MissionAssignmentStatus.Active) || m.ManagerId == userId)
             .OrderByDescending(m => m.CreatedAt)
             .ToListAsync();
     }
@@ -101,6 +102,7 @@ public class MissionRepository : GenericRepository<Mission>, IMissionRepository
     public async Task<Mission?> GetMissionDetailsByIdAsync(Guid id)
     {
         return await _context.Missions
+            .AsSplitQuery()
             .Include(m => m.Inspector)
             .Include(m => m.Manager)
             .Include(m => m.Uav)
@@ -124,5 +126,12 @@ public class MissionRepository : GenericRepository<Mission>, IMissionRepository
         return _context.Missions.AnyAsync(m => m.Id == missionId &&
             (m.ManagerId == userId || (m.InspectorId.HasValue && m.InspectorId.Value == userId) || m.Assignments.Any(a => a.UserId == userId && a.Status == MissionAssignmentStatus.Active)
              || _context.UserGeographicScopes.Any(s => s.UserId == userId && s.RegionId == m.RegionId)), cancellationToken);
+    }
+
+    public Task<bool> UserCanManageAsync(Guid missionId, Guid userId, bool global, CancellationToken cancellationToken)
+    {
+        if (global) return Task.FromResult(true);
+        return _context.Missions.AnyAsync(m => m.Id == missionId &&
+            _context.UserGeographicScopes.Any(s => s.UserId == userId && s.RegionId == m.RegionId), cancellationToken);
     }
 }

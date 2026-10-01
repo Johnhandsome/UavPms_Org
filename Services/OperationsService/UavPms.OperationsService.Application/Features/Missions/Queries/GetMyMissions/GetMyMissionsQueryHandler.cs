@@ -1,5 +1,6 @@
 using MediatR;
 using UavPms.OperationsService.Application.Features.Missions.DTOs;
+using UavPms.OperationsService.Domain.Enums;
 using UavPms.OperationsService.Domain.Interfaces.Repositories;
 using UavPms.OperationsService.Domain.Interfaces.Services;
 
@@ -52,7 +53,7 @@ public class GetMyMissionsQueryHandler : IRequestHandler<GetMyMissionsQuery, Lis
             MissionType = mission.MissionType.ToString(),
             TriggerReason = mission.TriggerReason,
             BoundaryWkt = mission.Boundary?.AsText(),
-            Team = mission.Assignments.Select(a => new MissionAssignmentDto(
+            Team = mission.Assignments.Where(a => a.Status == MissionAssignmentStatus.Active).Select(a => new MissionAssignmentDto(
                 a.Id,
                 a.UserId,
                 a.User?.FullName ?? a.User?.Email ?? string.Empty,

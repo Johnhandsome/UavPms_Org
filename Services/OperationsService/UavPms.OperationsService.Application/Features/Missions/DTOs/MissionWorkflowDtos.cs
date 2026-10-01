@@ -110,3 +110,82 @@ public class MissionAssignmentsOverviewDto
     public DateTime? ConfirmationDeadline { get; set; }
     public List<MissionAssignmentItemDto> Assignments { get; set; } = new();
 }
+
+public class MissionOperationResultDto
+{
+    public Guid Id { get; set; }
+    public string MissionCode { get; set; } = string.Empty;
+    public string Title { get; set; } = string.Empty;
+    public string Status { get; set; } = string.Empty;
+    public string Priority { get; set; } = string.Empty;
+    public Guid? RegionId { get; set; }
+    public Guid? InspectorId { get; set; }
+    public Guid? UavId { get; set; }
+    public Guid? ManagerId { get; set; }
+    public DateTime? PlannedStart { get; set; }
+    public DateTime? PlannedEnd { get; set; }
+    public DateTime? ConfirmationDeadline { get; set; }
+    public DateTime? AcceptedAt { get; set; }
+    public DateTime? StartedAt { get; set; }
+    public DateTime? EndedAt { get; set; }
+    public DateTime? PostponedAt { get; set; }
+    public string? ManagerInstructions { get; set; }
+    public uint Version { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public DateTime? UpdatedAt { get; set; }
+}
+
+public class MissionAssignmentResponseDto
+{
+    public Guid Id { get; set; }
+    public Guid MissionId { get; set; }
+    public Guid UserId { get; set; }
+    public string AssignmentRole { get; set; } = string.Empty;
+    public string Status { get; set; } = string.Empty;
+    public string ResponseStatus { get; set; } = string.Empty;
+    public bool IsRequired { get; set; }
+    public DateTime AssignedAt { get; set; }
+    public DateTime? RespondedAt { get; set; }
+    public string? ResponseReason { get; set; }
+    public uint Version { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public DateTime? UpdatedAt { get; set; }
+}
+
+public class DroneHandoverResponseDto
+{
+    public Guid Id { get; set; }
+    public Guid MissionId { get; set; }
+    public Guid DroneId { get; set; }
+    public Guid HandedOverBy { get; set; }
+    public Guid ReceivedBy { get; set; }
+    public string Condition { get; set; } = string.Empty;
+    public string Status { get; set; } = string.Empty;
+    public DateTime ReceivedAt { get; set; }
+    public DateTime? ReturnedAt { get; set; }
+    public DateTime CreatedAt { get; set; }
+}
+
+public class MissionCheckInResponseDto
+{
+    public Guid Id { get; set; }
+    public Guid MissionId { get; set; }
+    public Guid UserId { get; set; }
+    public DateTime CheckedInAt { get; set; }
+    public string Status { get; set; } = string.Empty;
+    public DateTime CreatedAt { get; set; }
+}
+
+public class MissionScopeAssetDto
+{
+    public Guid Id { get; set; }
+    public string AssetCode { get; set; } = string.Empty;
+    public string AssetType { get; set; } = string.Empty;
+    public Guid TowerId { get; set; }
+    public Guid? PowerLineId { get; set; }
+    public Guid? ManagementUnitId { get; set; }
+    public double? Latitude { get; set; }
+    public double? Longitude { get; set; }
+}
+
+

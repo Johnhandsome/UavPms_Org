@@ -14,6 +14,7 @@ using UavPms.Shared.Contracts.Constants;
 
 using UavPms.OperationsService.Application.Features.Assessments.DTOs;
 using UavPms.OperationsService.Application.Features.Missions.DTOs;
+using UavPms.OperationsService.Domain.Entities;
 
 namespace UavPms.OperationsService.API.Controllers;
 
@@ -35,8 +36,10 @@ public class MissionController : ControllerBase
 
     [HttpPost]
     [Authorize(Roles = UserRoles.AdminAndManager)]
+    [Obsolete("Direct mission creation via POST /api/v1/missions is deprecated. All missions must be created via Pre-Mission Assessment workflow (POST /api/v2/pre-mission-assessments/{id}/create-mission).")]
     public async Task<IActionResult> Create([FromBody] CreateMissionRequest request, CancellationToken cancellationToken = default)
     {
+        Response?.Headers?.TryAdd("Warning", "299 - \"Direct mission creation is deprecated. All missions must be created via Pre-Mission Assessment workflow (POST /api/v2/pre-mission-assessments/{id}/create-mission).\"");
         if (request.RegionId.HasValue)
         {
             var assessmentId = request.AssessmentId ?? request.SourceAssessmentId;
@@ -94,8 +97,11 @@ public class MissionController : ControllerBase
 
     [HttpPost("{id:guid}/scope/resolve")]
     [Authorize(Roles = UserRoles.AdminAndManager)]
-    public async Task<IActionResult> ResolveScope(Guid id, [FromBody] MissionScopeRequest request, CancellationToken ct) =>
-        Ok(new ApiResponse(true, "Mission scope resolved", await _lifecycle!.ResolveScopeAsync(id, request.BoundaryWkt, ct)));
+    public async Task<IActionResult> ResolveScope(Guid id, [FromBody] MissionScopeRequest request, CancellationToken ct)
+    {
+        var assets = await _lifecycle!.ResolveScopeAsync(id, request.BoundaryWkt, ct);
+        return Ok(new ApiResponse(true, "Mission scope resolved", assets.Select(MapScopeAsset).ToList()));
+    }
 
     [HttpPut("{id:guid}/assets")]
     [Authorize(Roles = UserRoles.AdminAndManager)]
@@ -112,7 +118,11 @@ public class MissionController : ControllerBase
 
     [HttpPost("{id:guid}/assignments")]
     [Authorize(Roles = UserRoles.AdminAndManager)]
-    public async Task<IActionResult> Assign(Guid id, [FromBody] MissionAssignmentRequest request, CancellationToken ct) => Ok(new ApiResponse(true, "Mission assignment added", await _lifecycle!.AssignAsync(id, new Mf01Assignment(request.UserId, request.AssignmentRole), ct)));
+    public async Task<IActionResult> Assign(Guid id, [FromBody] MissionAssignmentRequest request, CancellationToken ct)
+    {
+        var assignment = await _lifecycle!.AssignAsync(id, new Mf01Assignment(request.UserId, request.AssignmentRole), ct);
+        return Ok(new ApiResponse(true, "Mission assignment added", MapAssignment(assignment)));
+    }
 
     [HttpDelete("{id:guid}/assignments/{assignmentId:guid}")]
     [Authorize(Roles = UserRoles.AdminAndManager)]
@@ -125,11 +135,19 @@ public class MissionController : ControllerBase
 
     [HttpPost("{id:guid}/drone-handover")]
     [Authorize(Roles = UserRoles.AllAuthenticatedRoles)]
-    public async Task<IActionResult> Handover(Guid id, [FromBody] MissionHandoverRequest request, CancellationToken ct) => Ok(new ApiResponse(true, "Drone handover confirmed", await _lifecycle!.ConfirmHandoverAsync(id, new Mf01Handover(request.DroneId, request.ReceivedBy, request.Condition, request.Accepted), ct)));
+    public async Task<IActionResult> Handover(Guid id, [FromBody] MissionHandoverRequest request, CancellationToken ct)
+    {
+        var handover = await _lifecycle!.ConfirmHandoverAsync(id, new Mf01Handover(request.DroneId, request.ReceivedBy, request.Condition, request.Accepted), ct);
+        return Ok(new ApiResponse(true, "Drone handover confirmed", MapHandover(handover)));
+    }
 
     [HttpPost("{id:guid}/check-in")]
     [Authorize(Roles = UserRoles.AllAuthenticatedRoles)]
-    public async Task<IActionResult> CheckIn(Guid id, CancellationToken ct) => Ok(new ApiResponse(true, "Checked in", await _lifecycle!.CheckInAsync(id, ct)));
+    public async Task<IActionResult> CheckIn(Guid id, CancellationToken ct)
+    {
+        var checkIn = await _lifecycle!.CheckInAsync(id, ct);
+        return Ok(new ApiResponse(true, "Checked in", MapCheckIn(checkIn)));
+    }
 
     [HttpPost("{id:guid}/assignments/accept")]
     [Authorize(Roles = UserRoles.AllAuthenticatedRoles)]
@@ -137,7 +155,7 @@ public class MissionController : ControllerBase
     {
         if (_lifecycle == null) return BadRequest(new ApiResponse(false, "Lifecycle service unavailable"));
         var assignment = await _lifecycle.AcceptAssignmentAsync(id, ct);
-        return Ok(new ApiResponse(true, "Assignment accepted", assignment));
+        return Ok(new ApiResponse(true, "Assignment accepted", MapAssignment(assignment)));
     }
 
     [HttpPost("{id:guid}/assignments/postpone")]
@@ -146,7 +164,7 @@ public class MissionController : ControllerBase
     {
         if (_lifecycle == null) return BadRequest(new ApiResponse(false, "Lifecycle service unavailable"));
         var assignment = await _lifecycle.PostponeAssignmentAsync(id, request.Reason, ct);
-        return Ok(new ApiResponse(true, "Assignment postponed", assignment));
+        return Ok(new ApiResponse(true, "Assignment postponed", MapAssignment(assignment)));
     }
 
     [HttpPost("{id:guid}/start")]
@@ -161,7 +179,7 @@ public class MissionController : ControllerBase
     {
         if (_lifecycle == null) return BadRequest(new ApiResponse(false, "Lifecycle service unavailable"));
         var mission = await _lifecycle.CancelMissionAsync(id, request?.Reason, ct);
-        return Ok(new ApiResponse(true, "Mission cancelled", mission));
+        return Ok(new ApiResponse(true, "Mission cancelled", MapMissionResult(mission)));
     }
 
     [HttpPost("{id:guid}/confirm")]
@@ -170,7 +188,7 @@ public class MissionController : ControllerBase
     {
         if (_lifecycle == null) return BadRequest(new ApiResponse(false, "Lifecycle service unavailable"));
         var mission = await _lifecycle.ConfirmMissionAsync(id, request?.Reason, ct);
-        return Ok(new ApiResponse(true, "Mission confirmed successfully", mission));
+        return Ok(new ApiResponse(true, "Mission confirmed successfully", MapMissionResult(mission)));
     }
 
     [HttpPost("{id:guid}/suspend")]
@@ -179,7 +197,7 @@ public class MissionController : ControllerBase
     {
         if (_lifecycle == null) return BadRequest(new ApiResponse(false, "Lifecycle service unavailable"));
         var mission = await _lifecycle.SuspendMissionAsync(id, request.Reason, ct);
-        return Ok(new ApiResponse(true, "Mission suspended successfully", mission));
+        return Ok(new ApiResponse(true, "Mission suspended successfully", MapMissionResult(mission)));
     }
 
     [HttpPost("{id:guid}/resume")]
@@ -188,7 +206,7 @@ public class MissionController : ControllerBase
     {
         if (_lifecycle == null) return BadRequest(new ApiResponse(false, "Lifecycle service unavailable"));
         var mission = await _lifecycle.ResumeMissionAsync(id, request?.Reason, ct);
-        return Ok(new ApiResponse(true, "Mission resumed successfully", mission));
+        return Ok(new ApiResponse(true, "Mission resumed successfully", MapMissionResult(mission)));
     }
 
     [HttpPost("{id:guid}/postpone")]
@@ -197,7 +215,7 @@ public class MissionController : ControllerBase
     {
         if (_lifecycle == null) return BadRequest(new ApiResponse(false, "Lifecycle service unavailable"));
         var mission = await _lifecycle.PostponeMissionAsync(id, request.Reason, ct);
-        return Ok(new ApiResponse(true, "Mission postponed successfully", mission));
+        return Ok(new ApiResponse(true, "Mission postponed successfully", MapMissionResult(mission)));
     }
 
     [HttpPost("{id:guid}/remind")]
@@ -353,7 +371,89 @@ public class MissionController : ControllerBase
     }
 
     private static DateTime ToUtc(DateTime dt) =>
-        dt.Kind == DateTimeKind.Utc ? dt : DateTime.SpecifyKind(dt, DateTimeKind.Utc);
+        dt.Kind switch
+        {
+            DateTimeKind.Utc => dt,
+            DateTimeKind.Local => dt.ToUniversalTime(),
+            _ => DateTime.SpecifyKind(dt, DateTimeKind.Utc)
+        };
+
+    private static MissionOperationResultDto MapMissionResult(Mission m) => new()
+    {
+        Id = m.Id,
+        MissionCode = m.MissionCode,
+        Title = m.Title,
+        Status = m.Status.ToString(),
+        Priority = m.Priority.ToString(),
+        RegionId = m.RegionId,
+        InspectorId = m.InspectorId,
+        UavId = m.UavId,
+        ManagerId = m.ManagerId,
+        PlannedStart = m.PlannedStart,
+        PlannedEnd = m.PlannedEnd,
+        ConfirmationDeadline = m.ConfirmationDeadline,
+        AcceptedAt = m.AcceptedAt,
+        StartedAt = m.StartedAt,
+        EndedAt = m.EndedAt,
+        PostponedAt = m.PostponedAt,
+        ManagerInstructions = m.ManagerInstructions,
+        Version = m.Version,
+        CreatedAt = m.CreatedAt,
+        UpdatedAt = m.UpdatedAt
+    };
+
+    private static MissionAssignmentResponseDto MapAssignment(MissionAssignment a) => new()
+    {
+        Id = a.Id,
+        MissionId = a.MissionId,
+        UserId = a.UserId,
+        AssignmentRole = a.AssignmentRole,
+        Status = a.Status.ToString(),
+        ResponseStatus = a.ResponseStatus.ToString(),
+        IsRequired = a.IsRequired,
+        AssignedAt = a.AssignedAt,
+        RespondedAt = a.RespondedAt,
+        ResponseReason = a.ResponseReason,
+        Version = a.Version,
+        CreatedAt = a.CreatedAt,
+        UpdatedAt = a.UpdatedAt
+    };
+
+    private static DroneHandoverResponseDto MapHandover(DroneHandover h) => new()
+    {
+        Id = h.Id,
+        MissionId = h.MissionId,
+        DroneId = h.DroneId,
+        HandedOverBy = h.HandedOverBy,
+        ReceivedBy = h.ReceivedBy,
+        Condition = h.Condition,
+        Status = h.Status.ToString(),
+        ReceivedAt = h.ReceivedAt,
+        ReturnedAt = h.ReturnedAt,
+        CreatedAt = h.CreatedAt
+    };
+
+    private static MissionCheckInResponseDto MapCheckIn(MissionCheckIn c) => new()
+    {
+        Id = c.Id,
+        MissionId = c.MissionId,
+        UserId = c.UserId,
+        CheckedInAt = c.CheckedInAt,
+        Status = c.Status.ToString(),
+        CreatedAt = c.CreatedAt
+    };
+
+    private static MissionScopeAssetDto MapScopeAsset(Asset a) => new()
+    {
+        Id = a.Id,
+        AssetCode = a.AssetCode,
+        AssetType = a.AssetType,
+        TowerId = a.TowerId,
+        PowerLineId = a.PowerLineId,
+        ManagementUnitId = a.ManagementUnitId,
+        Latitude = a.Location?.Y,
+        Longitude = a.Location?.X
+    };
 }
 
 public record CreateMissionRequest(

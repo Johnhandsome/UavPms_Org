@@ -17,4 +17,5 @@ public interface IMissionRepository : IGenericRepository<Mission>
     
     Task<Mission?> GetMissionDetailsByIdAsync(Guid id);
     Task<bool> UserCanAccessAsync(Guid missionId, Guid userId, bool global, CancellationToken cancellationToken);
+    Task<bool> UserCanManageAsync(Guid missionId, Guid userId, bool global, CancellationToken cancellationToken);
 }
