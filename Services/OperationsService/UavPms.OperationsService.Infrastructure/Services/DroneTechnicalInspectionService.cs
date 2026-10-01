@@ -2,6 +2,7 @@ using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using UavPms.OperationsService.Application.Common.Exceptions;
 using UavPms.OperationsService.Application.Features.Assessments;
+using UavPms.OperationsService.Application.Features.Assessments.Policies;
 using UavPms.OperationsService.Application.Features.Assessments.DTOs;
 using UavPms.OperationsService.Domain.Entities;
 using UavPms.OperationsService.Domain.Enums;
@@ -29,20 +30,7 @@ public sealed class DroneTechnicalInspectionService : IDroneTechnicalInspectionS
         var drone = await _db.Uavs.SingleOrDefaultAsync(x => x.Id == request.DroneId && !x.IsDeleted, ct)
             ?? throw new NotFoundException("Drone", request.DroneId);
 
-        var requestMetrics = request.Metrics;
-        if (requestMetrics == null || requestMetrics.Count == 0)
-        {
-            requestMetrics = new List<DroneMetricSubmitDto>
-            {
-                new("BATTERY_HEALTH", "Power", (decimal)drone.BatteryLevel, null, null, "%", true, true, true, "Low"),
-                new("IMU_CALIBRATION", "Navigation", null, true, null, null, true, true, true, "Low"),
-                new("COMPASS_HEADING", "Navigation", null, true, null, null, true, true, false, "Low"),
-                new("GPS_RTK_FIX", "Positioning", null, true, null, null, true, true, true, "Low"),
-                new("ESC_PROPULSION", "Motors", null, true, null, null, true, true, true, "Low"),
-                new("PAYLOAD_GIMBAL", "Payload", null, true, null, null, true, true, false, "Low"),
-                new("RF_LINK_TELEMETRY", "Communication", 99.0m, null, null, "%", true, true, true, "Low")
-            };
-        }
+        var evalResult = DroneTechnicalHealthEvaluationPolicy.Evaluate(request.Metrics, drone.BatteryLevel);
 
         var inspection = new DroneTechnicalInspection
         {
@@ -54,61 +42,33 @@ public sealed class DroneTechnicalInspectionService : IDroneTechnicalInspectionS
             PolicyVersion = request.PolicyVersion ?? "v2.0",
             Notes = request.Notes ?? "Kiểm định kỹ thuật tự động trước khi bay (BIST/Telemetry)",
             SourceType = "bist",
-            SourceVersion = "v2.0"
+            SourceVersion = "v2.0",
+            Status = evalResult.Status,
+            Health = evalResult.Health
         };
 
-        var metrics = new List<DroneTechnicalMetric>();
-        var anyCriticalFailed = false;
-        var anyFailed = false;
-
-        foreach (var m in requestMetrics)
+        var metrics = evalResult.Metrics.Select(m => new DroneTechnicalMetric
         {
-            var passed = m.Passed ?? (m.BoolValue ?? (m.NumericValue.HasValue ? m.NumericValue.Value >= 0 : true));
-            if (!passed)
-            {
-                anyFailed = true;
-                if (m.Critical) anyCriticalFailed = true;
-            }
-
-            metrics.Add(new DroneTechnicalMetric
-            {
-                Inspection = inspection,
-                MetricCode = m.MetricCode,
-                Subsystem = m.Subsystem,
-                NumericValue = m.NumericValue,
-                BoolValue = m.BoolValue,
-                ValueText = m.ValueText,
-                Unit = m.Unit,
-                Passed = passed,
-                Critical = m.Critical,
-                Severity = m.Severity,
-                IsRequired = m.IsRequired
-            });
-        }
+            Inspection = inspection,
+            MetricCode = m.MetricCode,
+            Subsystem = m.Subsystem,
+            NumericValue = m.NumericValue,
+            BoolValue = m.BoolValue,
+            ValueText = m.ValueText,
+            Unit = m.Unit,
+            Passed = m.Passed,
+            Critical = m.Critical,
+            Severity = m.Severity,
+            IsRequired = m.IsRequired
+        }).ToList();
 
         inspection.Metrics = metrics;
-
-        if (anyCriticalFailed)
-        {
-            inspection.Status = DroneTechnicalInspectionStatus.Failed;
-            inspection.Health = TechnicalHealth.Critical;
-        }
-        else if (anyFailed)
-        {
-            inspection.Status = DroneTechnicalInspectionStatus.Passed;
-            inspection.Health = TechnicalHealth.Warning;
-        }
-        else
-        {
-            inspection.Status = DroneTechnicalInspectionStatus.Passed;
-            inspection.Health = TechnicalHealth.Healthy;
-        }
 
         inspection.RawSnapshot = JsonSerializer.Serialize(new
         {
             totalMetrics = metrics.Count,
-            criticalFailures = anyCriticalFailed,
-            warnings = anyFailed && !anyCriticalFailed,
+            criticalFailures = evalResult.AnyCriticalFailed,
+            warnings = evalResult.AnyWarning,
             evaluatedAt = DateTime.UtcNow
         });
 
@@ -143,11 +103,7 @@ public sealed class DroneTechnicalInspectionService : IDroneTechnicalInspectionS
 
     public async Task<DroneTechnicalInspection?> GetLatestInspectionAsync(Guid droneId, CancellationToken ct)
     {
-        if (!_current.IsAuthenticated)
-            throw new ForbiddenException("AUTHENTICATION_REQUIRED");
-
-        if (!await _db.Uavs.AnyAsync(x => x.Id == droneId && !x.IsDeleted, ct))
-            throw new NotFoundException("Drone", droneId);
+        await EnsureCallerHasDroneAccessAsync(droneId, ct);
 
         return await _db.DroneTechnicalInspections
             .Include(x => x.Metrics)
@@ -155,6 +111,32 @@ public sealed class DroneTechnicalInspectionService : IDroneTechnicalInspectionS
             .Where(x => x.DroneId == droneId)
             .OrderByDescending(x => x.CompletedAt)
             .FirstOrDefaultAsync(ct);
+    }
+
+    private async Task EnsureCallerHasDroneAccessAsync(Guid droneId, CancellationToken ct)
+    {
+        if (!_current.IsAuthenticated || _current.UserId == Guid.Empty)
+            throw new ForbiddenException("AUTHENTICATION_REQUIRED");
+
+        if (!await _db.Uavs.AnyAsync(x => x.Id == droneId && !x.IsDeleted, ct))
+            throw new NotFoundException("Drone", droneId);
+
+        if (_current.Roles.Contains(UserRoles.SystemAdmin, StringComparer.OrdinalIgnoreCase))
+            return;
+
+        var isAllowed = _current.Roles.Any(r =>
+            r.Equals(UserRoles.Manager, StringComparison.OrdinalIgnoreCase) ||
+            r.Equals(UserRoles.MaintenanceTechnician, StringComparison.OrdinalIgnoreCase) ||
+            r.Equals("Technician", StringComparison.OrdinalIgnoreCase) ||
+            r.Equals(UserRoles.Inspector, StringComparison.OrdinalIgnoreCase) ||
+            r.Equals("Pilot", StringComparison.OrdinalIgnoreCase));
+
+        if (!isAllowed)
+            throw new ForbiddenException("DRONE_ACCESS_DENIED");
+
+        var user = await _db.Users.SingleOrDefaultAsync(x => x.Id == _current.UserId, ct);
+        if (user == null || (user.Status != "Active" && user.Status != "Enabled"))
+            throw new ForbiddenException("ACTIVE_USER_REQUIRED");
     }
 
     private async Task RequireTechnicianOrManager(CancellationToken ct)
