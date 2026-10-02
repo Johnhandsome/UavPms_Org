@@ -19,12 +19,18 @@ public class MissionRepository : GenericRepository<Mission>, IMissionRepository
         string? status,
         string? sortBy = "createdAt",
         bool sortDescending = true,
-        string? priority = null)
+        string? priority = null,
+        IReadOnlyList<Guid?>? allowedRegionIds = null)
     {
         var query = _context.Missions
             .Include(m => m.Inspector)
             .Include(m => m.Manager)
             .AsQueryable();
+
+        if (allowedRegionIds != null && !allowedRegionIds.Contains(null))
+        {
+            query = query.Where(m => m.RegionId.HasValue && allowedRegionIds.Contains(m.RegionId.Value));
+        }
 
         if (!string.IsNullOrWhiteSpace(search))
         {

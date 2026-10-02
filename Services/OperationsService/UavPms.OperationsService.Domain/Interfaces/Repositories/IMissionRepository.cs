@@ -11,7 +11,8 @@ public interface IMissionRepository : IGenericRepository<Mission>
         string? status,
         string? sortBy = "createdAt",
         bool sortDescending = true,
-        string? priority = null);
+        string? priority = null,
+        IReadOnlyList<Guid?>? allowedRegionIds = null);
     
     Task<IReadOnlyList<Mission>> GetMissionsByAssignedUserAsync(Guid userId);
     
