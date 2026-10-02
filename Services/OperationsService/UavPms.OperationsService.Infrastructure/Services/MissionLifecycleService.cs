@@ -655,8 +655,36 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
         {
             throw new BusinessRuleException("INVALID_MISSION_STATE", ex.Message);
         }
+
+        if (m.UavId.HasValue && m.UavId.Value != Guid.Empty)
+        {
+            var drone = await _db.Uavs.FirstOrDefaultAsync(d => d.Id == m.UavId.Value, ct);
+            if (drone != null)
+            {
+                drone.Status = DroneStatus.Flying;
+                drone.UpdatedAt = DateTime.UtcNow;
+            }
+        }
+
         Audit(m.Id, "MISSION_STARTED");
         await SaveConcurrency(ct);
+
+        if (_notifier != null)
+        {
+            var eventDto = new UavPms.Shared.Contracts.Events.MissionLifecycleEventDto
+            {
+                MissionId = m.Id.ToString(),
+                Type = "STARTED",
+                Status = "IN_PROGRESS",
+                ActorRole = "Inspector",
+                ActorId = _current.UserId.ToString(),
+                ActorName = _current.Username ?? "Phi công",
+                ManagerId = m.ManagerId.ToString(),
+                InspectorId = m.InspectorId?.ToString() ?? string.Empty,
+                Timestamp = DateTime.UtcNow
+            };
+            await _notifier.NotifyAsync(eventDto, ct);
+        }
     }
 
     public async Task CompleteAsync(Guid missionId, CancellationToken ct)
@@ -670,8 +698,45 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
         {
             throw new BusinessRuleException("INVALID_MISSION_STATE", ex.Message);
         }
+
+        if (m.UavId.HasValue && m.UavId.Value != Guid.Empty)
+        {
+            var drone = await _db.Uavs.FirstOrDefaultAsync(d => d.Id == m.UavId.Value, ct);
+            if (drone != null && drone.Status == DroneStatus.Flying)
+            {
+                drone.Status = DroneStatus.Idle;
+                drone.UpdatedAt = DateTime.UtcNow;
+            }
+        }
+
+        var activeBookings = await _db.ResourceBookings
+            .Where(b => b.MissionId == m.Id && b.Status == ResourceBookingStatus.Active)
+            .ToListAsync(ct);
+        foreach (var b in activeBookings)
+        {
+            b.Status = ResourceBookingStatus.Released;
+            b.UpdatedAt = DateTime.UtcNow;
+        }
+
         Audit(m.Id, "MISSION_COMPLETED");
         await SaveConcurrency(ct);
+
+        if (_notifier != null)
+        {
+            var eventDto = new UavPms.Shared.Contracts.Events.MissionLifecycleEventDto
+            {
+                MissionId = m.Id.ToString(),
+                Type = "COMPLETED",
+                Status = "COMPLETED",
+                ActorRole = "Inspector",
+                ActorId = _current.UserId.ToString(),
+                ActorName = _current.Username ?? "Phi công",
+                ManagerId = m.ManagerId.ToString(),
+                InspectorId = m.InspectorId?.ToString() ?? string.Empty,
+                Timestamp = DateTime.UtcNow
+            };
+            await _notifier.NotifyAsync(eventDto, ct);
+        }
     }
 
     [Obsolete("Use CancelMissionAsync instead.")]
@@ -1707,6 +1772,173 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
             ConfirmationDeadline = mission.ConfirmationDeadline,
             Assignments = items
         };
+    }
+
+    public async Task<DroneHandover> ReturnDroneHandoverAsync(Guid missionId, Guid droneId, string condition, CancellationToken ct)
+    {
+        await RequireActiveCaller(ct);
+        var mission = await AccessibleMission(missionId, ct, true);
+        if (mission.Status is not (MissionStatus.Completed or MissionStatus.Cancelled or MissionStatus.InProgress))
+            throw new BusinessRuleException("RETURN_HANDOVER_INVALID_STATE", "Drone can only be returned for completed, in-progress or cancelled missions.");
+
+        var handover = mission.DroneHandovers.FirstOrDefault(x => x.DroneId == droneId && x.ReturnedAt == null && x.Status == DroneHandoverStatus.Accepted);
+        if (handover == null)
+            throw new NotFoundException("Active drone handover not found for this mission.");
+
+        handover.ReturnedAt = DateTime.UtcNow;
+        if (!string.IsNullOrWhiteSpace(condition))
+        {
+            handover.Condition = string.IsNullOrWhiteSpace(handover.Condition)
+                ? $"Return: {condition}"
+                : $"{handover.Condition} | Return: {condition}";
+        }
+
+        var drone = await _db.Uavs.FirstOrDefaultAsync(d => d.Id == droneId, ct);
+        if (drone != null)
+        {
+            drone.Status = DroneStatus.Idle;
+            drone.UpdatedAt = DateTime.UtcNow;
+        }
+
+        Audit(mission.Id, "DRONE_HANDOVER_RETURNED");
+        await _db.SaveChangesAsync(ct);
+        return handover;
+    }
+
+    public async Task<MissionFlightLog> UploadFlightLogAsync(Guid missionId, UploadFlightLogRequest request, CancellationToken ct)
+    {
+        await RequireActiveCaller(ct);
+        var mission = await AccessibleMission(missionId, ct, true);
+        if (mission.Status is MissionStatus.Draft or MissionStatus.PendingAcceptance)
+            throw new BusinessRuleException("FLIGHT_LOG_INVALID_STATE", "Cannot upload flight log before mission execution starts.");
+
+        if (string.IsNullOrWhiteSpace(request.GpsTrack))
+            throw new BusinessRuleException("GPS_TRACK_REQUIRED", "GPS track data is required.");
+
+        try
+        {
+            using var doc = JsonDocument.Parse(request.GpsTrack);
+        }
+        catch (JsonException)
+        {
+            throw new BusinessRuleException("INVALID_GPS_TRACK_JSON", "GPS track must be a valid JSON array or object.");
+        }
+
+        if (request.MinBatteryRecorded < 0 || request.MinBatteryRecorded > 100)
+            throw new BusinessRuleException("INVALID_BATTERY_LEVEL", "MinBatteryRecorded must be between 0 and 100.");
+
+        if (request.MaxAltitudeM < 0)
+            throw new BusinessRuleException("INVALID_ALTITUDE", "MaxAltitudeM cannot be negative.");
+
+        if (request.FlightDurationSeconds < 0)
+            throw new BusinessRuleException("INVALID_FLIGHT_DURATION", "FlightDurationSeconds cannot be negative.");
+
+        var log = new MissionFlightLog
+        {
+            Id = Guid.NewGuid(),
+            MissionId = missionId,
+            GpsTrack = request.GpsTrack,
+            MinBatteryRecorded = request.MinBatteryRecorded,
+            MaxAltitudeM = request.MaxAltitudeM,
+            FlightDurationSeconds = request.FlightDurationSeconds,
+            ConnectionStatus = !string.IsNullOrWhiteSpace(request.ConnectionStatus) ? request.ConnectionStatus : "Normal",
+            RecordedAt = DateTime.UtcNow,
+            CreatedBy = _current.UserId
+        };
+
+        _db.MissionFlightLogs.Add(log);
+        Audit(mission.Id, "FLIGHT_LOG_UPLOADED");
+        await _db.SaveChangesAsync(ct);
+        return log;
+    }
+
+    public async Task<IReadOnlyList<MissionFlightLog>> GetFlightLogsAsync(Guid missionId, CancellationToken ct)
+    {
+        await RequireActiveCaller(ct);
+        await AccessibleMission(missionId, ct, false);
+        return await _db.MissionFlightLogs
+            .Where(x => x.MissionId == missionId)
+            .OrderByDescending(x => x.RecordedAt)
+            .ToListAsync(ct);
+    }
+
+    public async Task<IncidentReport> SubmitIncidentReportAsync(Guid missionId, SubmitIncidentReportRequest request, CancellationToken ct)
+    {
+        await RequireActiveCaller(ct);
+        var mission = await AccessibleMission(missionId, ct, true);
+
+        if (string.IsNullOrWhiteSpace(request.IncidentType))
+            throw new BusinessRuleException("INCIDENT_TYPE_REQUIRED", "IncidentType is required.");
+
+        if (string.IsNullOrWhiteSpace(request.Severity))
+            throw new BusinessRuleException("SEVERITY_REQUIRED", "Severity is required.");
+
+        var validSeverities = new[] { "Low", "Medium", "High", "Critical" };
+        if (!validSeverities.Any(s => s.Equals(request.Severity, StringComparison.OrdinalIgnoreCase)))
+            throw new BusinessRuleException("INVALID_SEVERITY", "Severity must be one of: Low, Medium, High, Critical.");
+
+        if (string.IsNullOrWhiteSpace(request.Description) || request.Description.Trim().Length < 10)
+            throw new BusinessRuleException("DESCRIPTION_TOO_SHORT", "Description must have at least 10 characters.");
+
+        Guid resolvedAssetId = Guid.Empty;
+        if (request.AssetId.HasValue && request.AssetId.Value != Guid.Empty)
+        {
+            var assetExists = await _db.Assets.AnyAsync(a => a.Id == request.AssetId.Value, ct);
+            if (!assetExists) throw new NotFoundException("Asset", request.AssetId.Value);
+            resolvedAssetId = request.AssetId.Value;
+        }
+        else if (mission.MissionTargets.Count > 0)
+        {
+            resolvedAssetId = mission.MissionTargets.First().AssetId;
+        }
+        else
+        {
+            var firstAsset = await _db.Assets.FirstOrDefaultAsync(a => !a.IsDeleted && (mission.RegionId == null || a.Tower != null), ct);
+            if (firstAsset != null) resolvedAssetId = firstAsset.Id;
+        }
+
+        if (resolvedAssetId == Guid.Empty)
+            throw new BusinessRuleException("ASSET_REQUIRED", "An AssetId is required to associate the incident report.");
+
+        var isCritical = request.Severity.Equals("Critical", StringComparison.OrdinalIgnoreCase);
+
+        var incident = new IncidentReport
+        {
+            Id = Guid.NewGuid(),
+            MissionId = missionId,
+            ReportedBy = _current.UserId,
+            AssetId = resolvedAssetId,
+            IncidentType = request.IncidentType,
+            Severity = char.ToUpperInvariant(request.Severity[0]) + request.Severity[1..].ToLowerInvariant(),
+            Description = request.Description.Trim(),
+            FileUrl = request.FileUrl ?? string.Empty,
+            Status = "Reported",
+            ReportedAt = DateTime.UtcNow,
+            CreatedBy = _current.UserId
+        };
+
+        _db.IncidentReports.Add(incident);
+        Audit(mission.Id, isCritical ? "CRITICAL_INCIDENT_REPORTED" : "INCIDENT_REPORTED");
+
+        if (isCritical)
+        {
+            Notify(mission.ManagerId, mission, "CRITICAL_INCIDENT", $"{request.IncidentType}: {request.Description}");
+        }
+
+        await _db.SaveChangesAsync(ct);
+        return incident;
+    }
+
+    public async Task<IReadOnlyList<IncidentReport>> GetIncidentReportsAsync(Guid missionId, CancellationToken ct)
+    {
+        await RequireActiveCaller(ct);
+        await AccessibleMission(missionId, ct, false);
+        return await _db.IncidentReports
+            .Include(x => x.Reporter)
+            .Include(x => x.Asset)
+            .Where(x => x.MissionId == missionId)
+            .OrderByDescending(x => x.ReportedAt)
+            .ToListAsync(ct);
     }
 
     private static MissionDetectionBoundingBoxDto? ParseBoundingBoxDto(string? rawBoundingBox)

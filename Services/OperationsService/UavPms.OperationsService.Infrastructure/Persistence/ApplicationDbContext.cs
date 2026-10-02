@@ -64,7 +64,7 @@ public class ApplicationDbContext : DbContext
 
     public ApplicationDbContext(
         DbContextOptions<ApplicationDbContext> options,
-        ICurrentUserServices? currentUserServices) : base(options)
+        ICurrentUserServices? currentUserServices = null) : base(options)
     {
         _currentUserServices = currentUserServices;
     }

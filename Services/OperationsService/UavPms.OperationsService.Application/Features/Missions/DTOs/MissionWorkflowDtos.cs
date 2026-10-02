@@ -188,4 +188,54 @@ public class MissionScopeAssetDto
     public double? Longitude { get; set; }
 }
 
+public class MissionFlightLogDto
+{
+    public Guid Id { get; set; }
+    public Guid MissionId { get; set; }
+    public string GpsTrack { get; set; } = string.Empty;
+    public double MinBatteryRecorded { get; set; }
+    public double MaxAltitudeM { get; set; }
+    public int FlightDurationSeconds { get; set; }
+    public string ConnectionStatus { get; set; } = string.Empty;
+    public DateTime RecordedAt { get; set; }
+}
+
+public record UploadFlightLogRequest(
+    string GpsTrack,
+    double MinBatteryRecorded,
+    double MaxAltitudeM,
+    int FlightDurationSeconds,
+    string ConnectionStatus);
+
+public class IncidentReportDto
+{
+    public Guid Id { get; set; }
+    public Guid MissionId { get; set; }
+    public Guid ReportedBy { get; set; }
+    public string ReporterName { get; set; } = string.Empty;
+    public Guid AssetId { get; set; }
+    public string IncidentType { get; set; } = string.Empty;
+    public string Severity { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    public string FileUrl { get; set; } = string.Empty;
+    public string Status { get; set; } = string.Empty;
+    public DateTime ReportedAt { get; set; }
+}
+
+public record SubmitIncidentReportRequest(
+    string IncidentType,
+    string Severity,
+    string Description,
+    Guid? AssetId = null,
+    string? FileUrl = null);
+
+public record ReturnDroneHandoverRequest(
+    Guid DroneId,
+    string Condition);
+
+public record MissionCheckInRequest(
+    double? Latitude = null,
+    double? Longitude = null,
+    string? Notes = null);
+
 

@@ -141,10 +141,25 @@ public class MissionController : ControllerBase
         return Ok(new ApiResponse(true, "Drone handover confirmed", MapHandover(handover)));
     }
 
+    [HttpPost("{id:guid}/drone-handover/return")]
+    [Authorize(Roles = UserRoles.AllAuthenticatedRoles)]
+    public async Task<IActionResult> ReturnHandover(Guid id, [FromBody] ReturnDroneHandoverRequest request, CancellationToken ct)
+    {
+        if (_lifecycle == null) return BadRequest(new ApiResponse(false, "Lifecycle service unavailable"));
+        var handover = await _lifecycle.ReturnDroneHandoverAsync(id, request.DroneId, request.Condition, ct);
+        return Ok(new ApiResponse(true, "Drone return handover confirmed", MapHandover(handover)));
+    }
+
     [HttpPost("{id:guid}/check-in")]
     [Authorize(Roles = UserRoles.AllAuthenticatedRoles)]
-    public async Task<IActionResult> CheckIn(Guid id, CancellationToken ct)
+    public async Task<IActionResult> CheckIn(Guid id, [FromBody] MissionCheckInRequest? request = null, CancellationToken ct = default)
     {
+        if (request?.Latitude.HasValue == true && (request.Latitude < -90 || request.Latitude > 90))
+            return BadRequest(new ApiResponse(false, "Latitude must be between -90 and 90."));
+
+        if (request?.Longitude.HasValue == true && (request.Longitude < -180 || request.Longitude > 180))
+            return BadRequest(new ApiResponse(false, "Longitude must be between -180 and 180."));
+
         var checkIn = await _lifecycle!.CheckInAsync(id, ct);
         return Ok(new ApiResponse(true, "Checked in", MapCheckIn(checkIn)));
     }
@@ -173,6 +188,72 @@ public class MissionController : ControllerBase
     [HttpPost("{id:guid}/complete")]
     [Authorize(Roles = UserRoles.AdminManagerInspector)]
     public async Task<IActionResult> Complete(Guid id, CancellationToken ct) { await _lifecycle!.CompleteAsync(id, ct); return Ok(new ApiResponse(true, "Mission completed")); }
+
+    [HttpPost("{id:guid}/flight-log")]
+    [Authorize(Roles = UserRoles.AdminManagerInspector)]
+    public async Task<IActionResult> UploadFlightLog(Guid id, [FromBody] UploadFlightLogRequest request, CancellationToken ct)
+    {
+        if (_lifecycle == null) return BadRequest(new ApiResponse(false, "Lifecycle service unavailable"));
+        var log = await _lifecycle.UploadFlightLogAsync(id, request, ct);
+        return Ok(new ApiResponse(true, "Flight log uploaded successfully", MapFlightLog(log)));
+    }
+
+    [HttpGet("{id:guid}/flight-logs")]
+    [Authorize(Roles = UserRoles.AllAuthenticatedRoles)]
+    public async Task<IActionResult> GetFlightLogs(Guid id, CancellationToken ct)
+    {
+        if (_lifecycle == null) return BadRequest(new ApiResponse(false, "Lifecycle service unavailable"));
+        var logs = await _lifecycle.GetFlightLogsAsync(id, ct);
+        return Ok(new ApiResponse(true, "Flight logs retrieved successfully", logs.Select(MapFlightLog)));
+    }
+
+    [HttpPost("{id:guid}/incidents")]
+    [Authorize(Roles = UserRoles.AdminManagerInspector)]
+    public async Task<IActionResult> SubmitIncident(Guid id, [FromBody] SubmitIncidentReportRequest request, CancellationToken ct)
+    {
+        if (_lifecycle == null) return BadRequest(new ApiResponse(false, "Lifecycle service unavailable"));
+        var incident = await _lifecycle.SubmitIncidentReportAsync(id, request, ct);
+        return Ok(new ApiResponse(true, "Incident report submitted successfully", MapIncidentReport(incident)));
+    }
+
+    [HttpGet("{id:guid}/incidents")]
+    [Authorize(Roles = UserRoles.AllAuthenticatedRoles)]
+    public async Task<IActionResult> GetIncidents(Guid id, CancellationToken ct)
+    {
+        if (_lifecycle == null) return BadRequest(new ApiResponse(false, "Lifecycle service unavailable"));
+        var incidents = await _lifecycle.GetIncidentReportsAsync(id, ct);
+        return Ok(new ApiResponse(true, "Incident reports retrieved successfully", incidents.Select(MapIncidentReport)));
+    }
+
+    [HttpPost("{id:guid}/media")]
+    [Authorize(Roles = UserRoles.InspectorOnly)]
+    [Consumes("multipart/form-data")]
+    public async Task<IActionResult> UploadMedia(
+        Guid id,
+        [FromForm] Guid assetId,
+        [FromForm] DateTime capturedAt,
+        [FromForm] double? latitude,
+        [FromForm] double? longitude,
+        IFormFile file,
+        CancellationToken ct = default)
+    {
+        await using var stream = file?.OpenReadStream() ?? Stream.Null;
+
+        var command = new UavPms.OperationsService.Application.Features.Inspections.Commands.UploadImage.UploadInspectionImageCommand
+        {
+            MissionId = id,
+            AssetId = assetId,
+            CapturedAt = capturedAt,
+            Latitude = latitude,
+            Longitude = longitude,
+            FileStream = stream,
+            FileName = file?.FileName ?? string.Empty,
+            ContentType = file?.ContentType ?? string.Empty,
+        };
+
+        var result = await _mediator.Send(command, ct);
+        return Ok(new ApiResponse(true, "Media uploaded successfully.", result));
+    }
     [HttpPost("{id:guid}/cancel")]
     [Authorize(Roles = UserRoles.AdminAndManager)]
     public async Task<IActionResult> Cancel(Guid id, [FromBody] CancelMissionRequest? request = null, CancellationToken ct = default)
@@ -453,6 +534,33 @@ public class MissionController : ControllerBase
         ManagementUnitId = a.ManagementUnitId,
         Latitude = a.Location?.Y,
         Longitude = a.Location?.X
+    };
+
+    private static MissionFlightLogDto MapFlightLog(MissionFlightLog l) => new()
+    {
+        Id = l.Id,
+        MissionId = l.MissionId,
+        GpsTrack = l.GpsTrack,
+        MinBatteryRecorded = l.MinBatteryRecorded,
+        MaxAltitudeM = l.MaxAltitudeM,
+        FlightDurationSeconds = l.FlightDurationSeconds,
+        ConnectionStatus = l.ConnectionStatus,
+        RecordedAt = l.RecordedAt
+    };
+
+    private static IncidentReportDto MapIncidentReport(IncidentReport r) => new()
+    {
+        Id = r.Id,
+        MissionId = r.MissionId,
+        ReportedBy = r.ReportedBy,
+        ReporterName = r.Reporter?.FullName ?? string.Empty,
+        AssetId = r.AssetId,
+        IncidentType = r.IncidentType,
+        Severity = r.Severity,
+        Description = r.Description,
+        FileUrl = r.FileUrl,
+        Status = r.Status,
+        ReportedAt = r.ReportedAt
     };
 }
 

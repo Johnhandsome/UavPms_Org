@@ -49,5 +49,12 @@ public interface IMissionLifecycleService
     Task<IReadOnlyList<UavPms.OperationsService.Application.Features.Missions.DTOs.MissionActivityDto>> GetActivitiesAsync(Guid missionId, CancellationToken ct);
     Task<UavPms.OperationsService.Application.Features.Missions.DTOs.MissionActivityDto> AddActivityAsync(Guid missionId, UavPms.OperationsService.Application.Features.Missions.DTOs.CreateMissionActivityRequest request, CancellationToken ct);
     Task<UavPms.OperationsService.Application.Features.Missions.DTOs.MissionAssignmentsOverviewDto> GetAssignmentsOverviewAsync(Guid missionId, CancellationToken ct);
+
+    // MF03 Field Execution, Handover Return, Flight Logs & Incident Reports
+    Task<DroneHandover> ReturnDroneHandoverAsync(Guid missionId, Guid droneId, string condition, CancellationToken ct);
+    Task<MissionFlightLog> UploadFlightLogAsync(Guid missionId, UavPms.OperationsService.Application.Features.Missions.DTOs.UploadFlightLogRequest request, CancellationToken ct);
+    Task<IReadOnlyList<MissionFlightLog>> GetFlightLogsAsync(Guid missionId, CancellationToken ct);
+    Task<IncidentReport> SubmitIncidentReportAsync(Guid missionId, UavPms.OperationsService.Application.Features.Missions.DTOs.SubmitIncidentReportRequest request, CancellationToken ct);
+    Task<IReadOnlyList<IncidentReport>> GetIncidentReportsAsync(Guid missionId, CancellationToken ct);
 }
 
