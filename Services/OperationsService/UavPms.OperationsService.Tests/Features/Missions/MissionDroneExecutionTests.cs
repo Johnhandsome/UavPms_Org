@@ -281,4 +281,75 @@ public class MissionDroneExecutionTests
         // Assert
         await act.Should().ThrowAsync<NotFoundException>();
     }
+
+    [Fact]
+    public async Task StartAsync_ShouldThrowForbiddenException_WhenInspectorIsNotAssignedToMissionEvenInSameRegion()
+    {
+        // Arrange
+        var anotherInspectorId = Guid.NewGuid();
+        var missionId = Guid.NewGuid();
+
+        // Add scope for current user in _regionId so they pass AccessibleMission
+        _db.UserGeographicScopes.Add(new UserGeographicScope
+        {
+            Id = Guid.NewGuid(),
+            UserId = _userId,
+            RegionId = _regionId
+        });
+
+        var mission = new Mission
+        {
+            Id = missionId,
+            MissionCode = "MSN-IDOR-START",
+            Title = "Another Inspector Mission",
+            RegionId = _regionId,
+            InspectorId = anotherInspectorId,
+            UavId = _droneId,
+            Status = MissionStatus.Assigned
+        };
+        _db.Missions.Add(mission);
+        await _db.SaveChangesAsync();
+
+        // Act
+        Func<Task> act = async () => await _service.StartAsync(missionId, CancellationToken.None);
+
+        // Assert
+        await act.Should().ThrowAsync<ForbiddenException>()
+            .WithMessage("USER_NOT_ASSIGNED_TO_MISSION");
+    }
+
+    [Fact]
+    public async Task CompleteAsync_ShouldThrowForbiddenException_WhenInspectorIsNotAssignedToMissionEvenInSameRegion()
+    {
+        // Arrange
+        var anotherInspectorId = Guid.NewGuid();
+        var missionId = Guid.NewGuid();
+
+        _db.UserGeographicScopes.Add(new UserGeographicScope
+        {
+            Id = Guid.NewGuid(),
+            UserId = _userId,
+            RegionId = _regionId
+        });
+
+        var mission = new Mission
+        {
+            Id = missionId,
+            MissionCode = "MSN-IDOR-COMPLETE",
+            Title = "Another Inspector Mission",
+            RegionId = _regionId,
+            InspectorId = anotherInspectorId,
+            UavId = _droneId,
+            Status = MissionStatus.InProgress
+        };
+        _db.Missions.Add(mission);
+        await _db.SaveChangesAsync();
+
+        // Act
+        Func<Task> act = async () => await _service.CompleteAsync(missionId, CancellationToken.None);
+
+        // Assert
+        await act.Should().ThrowAsync<ForbiddenException>()
+            .WithMessage("USER_NOT_ASSIGNED_TO_MISSION");
+    }
 }
