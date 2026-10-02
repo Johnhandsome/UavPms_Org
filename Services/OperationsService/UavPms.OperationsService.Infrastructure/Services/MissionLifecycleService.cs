@@ -647,6 +647,7 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
     public async Task StartAsync(Guid missionId, CancellationToken ct)
     {
         var m = await AccessibleMission(missionId, ct, true);
+        EnsureAssignedInspectorOrManager(m);
         try
         {
             m.Start();
@@ -690,6 +691,7 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
     public async Task CompleteAsync(Guid missionId, CancellationToken ct)
     {
         var m = await AccessibleMission(missionId, ct, true);
+        EnsureAssignedInspectorOrManager(m);
         try
         {
             m.Complete();
@@ -1778,6 +1780,7 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
     {
         await RequireActiveCaller(ct);
         var mission = await AccessibleMission(missionId, ct, true);
+        EnsureAssignedInspectorOrManager(mission);
         if (mission.Status is not (MissionStatus.Completed or MissionStatus.Cancelled or MissionStatus.InProgress))
             throw new BusinessRuleException("RETURN_HANDOVER_INVALID_STATE", "Drone can only be returned for completed, in-progress or cancelled missions.");
 
@@ -1809,6 +1812,7 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
     {
         await RequireActiveCaller(ct);
         var mission = await AccessibleMission(missionId, ct, true);
+        EnsureAssignedInspectorOrManager(mission);
         if (mission.Status is MissionStatus.Draft or MissionStatus.PendingAcceptance)
             throw new BusinessRuleException("FLIGHT_LOG_INVALID_STATE", "Cannot upload flight log before mission execution starts.");
 
@@ -1866,6 +1870,7 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
     {
         await RequireActiveCaller(ct);
         var mission = await AccessibleMission(missionId, ct, true);
+        EnsureAssignedInspectorOrManager(mission);
 
         if (string.IsNullOrWhiteSpace(request.IncidentType))
             throw new BusinessRuleException("INCIDENT_TYPE_REQUIRED", "IncidentType is required.");
@@ -2047,6 +2052,18 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
     private bool IsGlobal => _current.Roles.Contains(UserRoles.SystemAdmin, StringComparer.OrdinalIgnoreCase);
     private static bool IsActive(string status) => status.Equals("Active", StringComparison.OrdinalIgnoreCase) || status.Equals("Enabled", StringComparison.OrdinalIgnoreCase);
     private static void RequirePreExecution(Mission m) { if (m.Status is MissionStatus.InProgress or MissionStatus.Completed or MissionStatus.Cancelled) throw new BusinessRuleException("MISSION_IMMUTABLE_AFTER_START"); }
+    private void EnsureAssignedInspectorOrManager(Mission m)
+    {
+        if (IsGlobal || _current.Roles.Contains(UserRoles.Manager, StringComparer.OrdinalIgnoreCase))
+            return;
+
+        var uid = _current.UserId;
+        var isAssigned = (m.InspectorId.HasValue && m.InspectorId.Value == uid) ||
+                         m.Assignments.Any(a => a.UserId == uid && a.Status == MissionAssignmentStatus.Active);
+
+        if (!isAssigned)
+            throw new ForbiddenException("USER_NOT_ASSIGNED_TO_MISSION");
+    }
     private void Audit(Guid id, string action, string oldValues = "{}", string newValues = "{}") => _db.AuditLogs.Add(new AuditLog { UserId = _current.UserId, TableName = "Missions", RecordId = id, ActionType = action, OldValues = oldValues, NewValues = newValues, IpAddress = _current.IpAddress ?? "", UserAgent = _current.UserAgent ?? "" });
     private static (string Title, string Body) GetNotificationContent(string type, Mission m, string? role)
     {
