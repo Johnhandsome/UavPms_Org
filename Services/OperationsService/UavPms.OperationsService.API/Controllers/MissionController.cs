@@ -363,7 +363,7 @@ public class MissionController : ControllerBase
 
     [HttpPost("{missionId:guid}/detections/{detectionId:guid}/review")]
     [HttpPut("{missionId:guid}/detections/{detectionId:guid}/review")]
-    [Authorize(Roles = UserRoles.AllAuthenticatedRoles)]
+    [Authorize(Roles = UserRoles.AdminManagerAnalyst)]
     public async Task<IActionResult> ReviewDetection(
         Guid missionId,
         Guid detectionId,
