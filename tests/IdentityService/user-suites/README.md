@@ -28,7 +28,7 @@ Tài liệu và mã nguồn kiểm thử tích hợp (integration & regression t
 
 ### Cài đặt thư viện:
 ```bash
-pip install -r tests/user-suites/requirements.txt
+pip install -r tests/IdentityService/user-suites/requirements.txt
 ```
 
 ---
@@ -37,22 +37,22 @@ pip install -r tests/user-suites/requirements.txt
 
 ### Chạy toàn bộ 80 test case:
 ```bash
-python3 tests/user-suites/run_all_suites.py
+python3 tests/IdentityService/user-suites/run_all_suites.py
 ```
 
 ### Chạy từng suite riêng lẻ:
 ```bash
 # 1. User Creation Suite (25 TCs)
-python3 tests/user-suites/test_user_create_suite.py
+python3 tests/IdentityService/user-suites/test_user_create_suite.py
 
 # 2. User Listing & Detail Suite (20 TCs)
-python3 tests/user-suites/test_user_list_suite.py
+python3 tests/IdentityService/user-suites/test_user_list_suite.py
 
 # 3. User Update Suite (20 TCs)
-python3 tests/user-suites/test_user_update_suite.py
+python3 tests/IdentityService/user-suites/test_user_update_suite.py
 
 # 4. User Assignable Suite (15 TCs)
-python3 tests/user-suites/test_user_assign_suite.py
+python3 tests/IdentityService/user-suites/test_user_assign_suite.py
 ```
 
 ---
@@ -65,5 +65,5 @@ Nếu chạy kiểm thử trên server staging/CI/CD, bạn có thể thiết l�
 
 Ví dụ:
 ```bash
-GATEWAY_URL="http://staging-gateway.uavpms.local:5194" python3 tests/user-suites/run_all_suites.py
+GATEWAY_URL="http://staging-gateway.uavpms.local:5194" python3 tests/IdentityService/user-suites/run_all_suites.py
 ```

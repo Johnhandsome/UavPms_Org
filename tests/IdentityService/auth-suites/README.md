@@ -30,7 +30,7 @@ Tài liệu và mã nguồn kiểm thử tích hợp (integration & regression t
 
 ### Cài đặt thư viện:
 ```bash
-pip install -r tests/auth-suites/requirements.txt
+pip install -r tests/IdentityService/auth-suites/requirements.txt
 ```
 
 ---
@@ -39,28 +39,28 @@ pip install -r tests/auth-suites/requirements.txt
 
 ### Chạy toàn bộ 147 test case:
 ```bash
-python3 tests/auth-suites/run_all_suites.py
+python3 tests/IdentityService/auth-suites/run_all_suites.py
 ```
 
 ### Chạy từng suite riêng lẻ:
 ```bash
 # 1. Login Suite (32 TCs)
-python3 tests/auth-suites/test_login_suite.py
+python3 tests/IdentityService/auth-suites/test_login_suite.py
 
 # 2. Refresh Token Suite (25 TCs)
-python3 tests/auth-suites/test_refresh_token_suite.py
+python3 tests/IdentityService/auth-suites/test_refresh_token_suite.py
 
 # 3. Send OTP Suite (25 TCs)
-python3 tests/auth-suites/test_send_otp_suite.py
+python3 tests/IdentityService/auth-suites/test_send_otp_suite.py
 
 # 4. Verify OTP Suite (25 TCs)
-python3 tests/auth-suites/test_verify_otp_suite.py
+python3 tests/IdentityService/auth-suites/test_verify_otp_suite.py
 
 # 5. Reset Password Suite (20 TCs)
-python3 tests/auth-suites/test_reset_password_suite.py
+python3 tests/IdentityService/auth-suites/test_reset_password_suite.py
 
 # 6. Get My Profile Suite (20 TCs)
-python3 tests/auth-suites/test_me_profile_suite.py
+python3 tests/IdentityService/auth-suites/test_me_profile_suite.py
 ```
 
 ---
@@ -74,5 +74,5 @@ Nếu chạy kiểm thử trên server staging/CI/CD, bạn có thể thiết l�
 
 Ví dụ:
 ```bash
-GATEWAY_URL="http://staging-gateway.uavpms.local:5194" python3 tests/auth-suites/run_all_suites.py
+GATEWAY_URL="http://staging-gateway.uavpms.local:5194" python3 tests/IdentityService/auth-suites/run_all_suites.py
 ```
