@@ -192,7 +192,7 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
         await MissionResourceGuard.EndActiveBookingsAsync(_db, missionId, ResourceBookingStatus.Cancelled, ct, b => b.UserId == assignment.UserId);
 
         // Removing the last pending required member may complete the acceptance (BR-30).
-        if (mission.Status == MissionStatus.PendingAcceptance)
+        if (mission.Status == MissionStatus.Pending)
         {
             if (mission.CheckAcceptance()) Audit(mission.Id, "MISSION_CONFIRMED");
         }
@@ -268,7 +268,7 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
         var mission = await AccessibleMission(missionId, ct, true);
         // BR-36: a member of the mission or a manager of its region records the handover.
         EnsureAssignedInspectorOrManager(mission);
-        if (mission.Status is not (MissionStatus.Assigned or MissionStatus.Preparing)) throw new BusinessRuleException("HANDOVER_INVALID_STATE");
+        if (mission.Status != MissionStatus.Ready) throw new BusinessRuleException("HANDOVER_INVALID_STATE");
         if (mission.UavId != request.DroneId) throw new BusinessRuleException("DRONE_NOT_ASSIGNED");
         if (!mission.ActiveAssignments().Any(x => x.UserId == request.ReceivedBy)) throw new ForbiddenException("RECEIVER_NOT_ASSIGNED");
         if (string.IsNullOrWhiteSpace(request.Condition)) throw new BusinessRuleException("DRONE_CONDITION_REQUIRED");
@@ -300,7 +300,7 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
     {
         await RequireActiveCaller(ct);
         var mission = await AccessibleMission(missionId, ct, true);
-        if (mission.Status is not (MissionStatus.Assigned or MissionStatus.Preparing))
+        if (mission.Status != MissionStatus.Ready)
             throw new BusinessRuleException("CHECK_IN_INVALID_STATE");
 
         var assignment = mission.Assignments.SingleOrDefault(x => x.UserId == _current.UserId && x.Status == MissionAssignmentStatus.Active);
@@ -402,8 +402,8 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
         var m = await AccessibleMission(missionId, ct, true);
         EnsureAssignedInspectorOrManager(m);
 
-        // BR-05/BR-38: Ready, Assigned or Preparing, and only once every required member has accepted (BR-30).
-        if (m.Status is not (MissionStatus.Ready or MissionStatus.Assigned or MissionStatus.Preparing) || m.StartedAt != null)
+        // BR-05/BR-38: Ready, and only once every required member has accepted (BR-30).
+        if (m.Status != MissionStatus.Ready || m.StartedAt != null)
             throw new BusinessRuleException("INVALID_MISSION_STATE", $"Cannot start mission with status {m.Status}.");
         if (!m.AllRequiredAccepted())
             throw new BusinessRuleException("REQUIRED_ACCEPTANCE_PENDING", "Every required member must accept before the start.");
@@ -730,8 +730,8 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
                 Status = mission.Status switch
                 {
                     MissionStatus.InProgress => "IN_PROGRESS",
-                    MissionStatus.PendingAcceptance => "PENDING_ACCEPTANCE",
-                    _ => "CONFIRMED"
+                    MissionStatus.Pending => "PENDING",
+                    _ => "READY"
                 },
                 ActorId = _current.UserId.ToString(),
                 ActorName = actorName,
@@ -1318,10 +1318,11 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
         var isApproved = string.Equals(request.Status, "Approved", StringComparison.OrdinalIgnoreCase) ||
                          string.Equals(request.Status, "Confirmed", StringComparison.OrdinalIgnoreCase);
         var isRejected = string.Equals(request.Status, "Rejected", StringComparison.OrdinalIgnoreCase);
+        var isInReview = string.Equals(request.Status, "InReview", StringComparison.OrdinalIgnoreCase);
 
-        if (!isApproved && !isRejected)
+        if (!isApproved && !isRejected && !isInReview)
         {
-            throw new BusinessRuleException("INVALID_REVIEW_STATUS", "Trạng thái phê duyệt phải là 'Approved' hoặc 'Rejected'.");
+            throw new BusinessRuleException("INVALID_REVIEW_STATUS", "Trạng thái phê duyệt phải là 'InReview', 'Approved'/'Confirmed' hoặc 'Rejected'.");
         }
 
         if (isApproved && !anomaly.TowerId.HasValue)
@@ -1331,7 +1332,7 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
                 ?? throw new BusinessRuleException("TOWER_REQUIRED", "Khuyết tật phải được gắn với cột điện trước khi xác nhận.");
         }
 
-        anomaly.ValidationStatus = isApproved ? "Confirmed" : "Rejected";
+        anomaly.ValidationStatus = isApproved ? "Confirmed" : (isRejected ? "Rejected" : "InReview");
         anomaly.AnalystId = _current.UserId;
         anomaly.AnalystNotes = request.ReviewNotes ?? string.Empty;
         anomaly.ValidatedAt = DateTime.UtcNow;
@@ -1482,9 +1483,10 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
             var statusStr = t.Status switch
             {
                 TicketStatus.Open => "Pending",
+                TicketStatus.Assigned => "Assigned",
                 TicketStatus.InProgress => "InProgress",
                 TicketStatus.PendingVerification => "PendingVerification",
-                TicketStatus.Resolved or TicketStatus.Closed => "Completed",
+                TicketStatus.Closed => "Completed",
                 _ => "Pending"
             };
 
@@ -1740,7 +1742,7 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
         await RequireActiveCaller(ct);
         var mission = await AccessibleMission(missionId, ct, true);
         EnsureAssignedInspectorOrManager(mission);
-        if (mission.Status is MissionStatus.Draft or MissionStatus.PendingAcceptance)
+        if (mission.Status is MissionStatus.Draft or MissionStatus.Pending)
             throw new BusinessRuleException("FLIGHT_LOG_INVALID_STATE", "Cannot upload flight log before mission execution starts.");
 
         if (string.IsNullOrWhiteSpace(request.GpsTrack))
@@ -1971,7 +1973,7 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
     /// <summary>Table 59: a member answers (accept/postpone) only while the mission waits for or holds its team.</summary>
     private static void RequireRespondableState(Mission m)
     {
-        if (m.Status is not (MissionStatus.PendingAcceptance or MissionStatus.Assigned or MissionStatus.Preparing or MissionStatus.Ready) || m.StartedAt != null)
+        if (m.Status is not (MissionStatus.Pending or MissionStatus.Ready) || m.StartedAt != null)
             throw new BusinessRuleException("INVALID_MISSION_STATE", $"Cannot respond to an assignment while the mission is {m.Status}.");
     }
 
@@ -2021,7 +2023,7 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
         TouchMission(mission);
 
         var allConfirmed = false;
-        if (mission.Status == MissionStatus.PendingAcceptance)
+        if (mission.Status == MissionStatus.Pending)
         {
             allConfirmed = mission.CheckAcceptance();
             if (allConfirmed)

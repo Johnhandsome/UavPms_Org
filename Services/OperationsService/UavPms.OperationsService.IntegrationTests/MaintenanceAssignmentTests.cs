@@ -57,6 +57,7 @@ public class MaintenanceAssignmentTests
 
             var dto = await service.AssignTechnicianAsync(ticketId, new AssignTechnicianRequest { TechnicianId = technicianId, DueDate = DateTime.UtcNow.AddDays(3) });
             dto.TechnicianId.Should().Be(technicianId);
+            dto.Status.Should().Be("Assigned");
             dto.AssignedAt.Should().NotBeNull();
 
             (await service.GetTechniciansAsync()).Single(t => t.Id == technicianId).ActiveTicketCount.Should().Be(1);
@@ -126,7 +127,7 @@ public class MaintenanceAssignmentTests
         await using (var db = _pg.CreateContext())
         {
             var anomalyId = (await db.MaintenanceTickets.SingleAsync(t => t.Id == ticketId)).AnomalyId;
-            (await db.DetectedAnomalies.SingleAsync(a => a.Id == anomalyId)).ValidationStatus.Should().Be("Resolved");
+            (await db.DetectedAnomalies.SingleAsync(a => a.Id == anomalyId)).ValidationStatus.Should().Be("Confirmed");
         }
     }
 

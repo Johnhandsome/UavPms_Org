@@ -215,7 +215,7 @@ public sealed class PreMissionAssessmentService : IPreMissionAssessmentService
 
         await EnsureManagerHasAssessmentAccessAsync(existing, ct);
 
-        if (existing.Status is PreMissionAssessmentStatus.Draft or PreMissionAssessmentStatus.Evaluating)
+        if (existing.Status == PreMissionAssessmentStatus.Evaluating)
         {
             if (await ApplyExpiryAsync(existing, ct))
                 return existing;
@@ -316,8 +316,7 @@ public sealed class PreMissionAssessmentService : IPreMissionAssessmentService
         // that is expired by the time it is read.
         var now = DateTime.UtcNow;
         var due = await visible
-            .Where(x => (x.Status == PreMissionAssessmentStatus.Draft ||
-                         x.Status == PreMissionAssessmentStatus.Evaluating ||
+            .Where(x => (x.Status == PreMissionAssessmentStatus.Evaluating ||
                          x.Status == PreMissionAssessmentStatus.Ready ||
                          x.Status == PreMissionAssessmentStatus.NotReady) &&
                         ((x.ValidUntil != null && x.ValidUntil <= now) || x.PlannedEnd <= now))
@@ -389,7 +388,7 @@ public sealed class PreMissionAssessmentService : IPreMissionAssessmentService
         var clean = status.Trim().Replace("-", "_").ToUpperInvariant();
         return clean switch
         {
-            "DRAFT" => PreMissionAssessmentStatus.Draft,
+            "DRAFT" => PreMissionAssessmentStatus.Evaluating,
             "EVALUATING" => PreMissionAssessmentStatus.Evaluating,
             "READY" => PreMissionAssessmentStatus.Ready,
             "NOT_READY" or "NOTREADY" or "INCOMPLETE" => PreMissionAssessmentStatus.NotReady,
@@ -789,7 +788,7 @@ public sealed class PreMissionAssessmentService : IPreMissionAssessmentService
                 Objective = request.Objective,
                 TriggerReason = request.EmergencyReason,
                 IsImmediate = request.IsImmediate,
-                Status = MissionStatus.PendingAcceptance,
+                Status = MissionStatus.Pending,
                 PreMissionAssessmentId = assessment.Id,
                 Boundary = assessment.ProposedBoundary,
                 IdempotencyKey = request.IdempotencyKey,

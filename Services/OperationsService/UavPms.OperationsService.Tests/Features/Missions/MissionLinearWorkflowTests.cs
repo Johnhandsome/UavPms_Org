@@ -56,7 +56,7 @@ public class MissionLinearWorkflowTests
             MissionCode = "MS-DET-01",
             Title = "Mission New - No AI Results",
             ManagerId = userId,
-            Status = MissionStatus.PendingAcceptance
+            Status = MissionStatus.Pending
         };
         db.Missions.Add(mission);
         await db.SaveChangesAsync();
@@ -480,7 +480,7 @@ public class MissionLinearWorkflowTests
             MissionCode = "MS-ACT-01",
             Title = "Mission Activity Stream",
             ManagerId = managerId,
-            Status = MissionStatus.Assigned
+            Status = MissionStatus.Ready
         };
         mission.Assignments.Add(new MissionAssignment
         {
@@ -537,7 +537,7 @@ public class MissionLinearWorkflowTests
             MissionCode = "MS-ASSIGN-01",
             Title = "Mission Multi-Role Matrix",
             ManagerId = managerId,
-            Status = MissionStatus.PendingAcceptance,
+            Status = MissionStatus.Pending,
             ConfirmationDeadline = deadline
         };
 
@@ -624,7 +624,7 @@ public class MissionLinearWorkflowTests
             MissionCode = "MS-AUTO-CONFIRM-01",
             Title = "Mission Multi-Role Auto Confirm",
             ManagerId = managerId,
-            Status = MissionStatus.PendingAcceptance
+            Status = MissionStatus.Pending
         };
 
         // Pilot đã accept từ trước
@@ -664,7 +664,7 @@ public class MissionLinearWorkflowTests
         assignmentResult.ResponseStatus.Should().Be(MissionAssignmentResponse.Accepted);
 
         var updatedMission = await db.Missions.FindAsync(mission.Id);
-        updatedMission!.Status.Should().Be(MissionStatus.Assigned); // Tự động chuyển sang Assigned (CONFIRMED)
+        updatedMission!.Status.Should().Be(MissionStatus.Ready); // Tự động chuyển sang Assigned (CONFIRMED)
         updatedMission.AcceptedAt.Should().NotBeNull();
 
         // Kiểm tra realtime event CONFIRMED được broadcast
@@ -692,7 +692,7 @@ public class MissionLinearWorkflowTests
             MissionCode = "MS-ACT-SPOOF",
             Title = "Mission Spoof Test",
             ManagerId = managerId,
-            Status = MissionStatus.Assigned
+            Status = MissionStatus.Ready
         };
         mission.Assignments.Add(new MissionAssignment
         {
@@ -741,7 +741,7 @@ public class MissionLinearWorkflowTests
             MissionCode = "MS-FORBIDDEN-OVERVIEW",
             Title = "Mission Private",
             ManagerId = managerId,
-            Status = MissionStatus.Assigned
+            Status = MissionStatus.Ready
         };
         db.Missions.Add(mission);
         await db.SaveChangesAsync();

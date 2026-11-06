@@ -3,19 +3,10 @@ namespace UavPms.OperationsService.Domain.Enums;
 public enum MissionStatus
 {
     Draft = 0,
-    Assigned = 1,
-    Preparing = 2,
-    Ready = 3,
+    Pending = 1,
+    Ready = 2,
+    Postponed = 3,
     InProgress = 4,
     Completed = 5,
     Cancelled = 6,
-    PendingAcceptance = 7,
-    Suspended = 8,
-    Postponed = 9,
-
-    // Source compatibility for older callers. Persisted legacy values are mapped in EF.
-    Pending = Draft,
-    Executing = InProgress,
-    PendingConfirmation = PendingAcceptance,
-    Confirmed = Assigned,
 }

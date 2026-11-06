@@ -248,7 +248,7 @@ public class UploadInspectionImageCommandHandlerTests
 
     [Theory]
     [InlineData(MissionStatus.Draft)]
-    [InlineData(MissionStatus.PendingAcceptance)]
+    [InlineData(MissionStatus.Pending)]
     public async Task Handle_ShouldThrowBusinessRuleException_WhenMissionInPreExecutionState(MissionStatus status)
     {
         // Arrange

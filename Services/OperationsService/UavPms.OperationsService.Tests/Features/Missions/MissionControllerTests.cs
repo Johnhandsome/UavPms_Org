@@ -65,7 +65,7 @@ public class MissionControllerTests
             Id = missionId,
             MissionCode = "MSN-CONFIRMED",
             Title = "Confirmed Mission",
-            Status = UavPms.OperationsService.Domain.Enums.MissionStatus.Assigned,
+            Status = UavPms.OperationsService.Domain.Enums.MissionStatus.Ready,
             Priority = UavPms.OperationsService.Domain.Enums.MissionPriority.High,
             Version = 3
         };
@@ -85,7 +85,7 @@ public class MissionControllerTests
         var dto = (MissionOperationResultDto)apiResponse.Data!;
         dto.Id.Should().Be(missionId);
         dto.MissionCode.Should().Be("MSN-CONFIRMED");
-        dto.Status.Should().Be("Assigned");
+        dto.Status.Should().Be("Ready");
         dto.Priority.Should().Be("High");
         dto.Version.Should().Be(3);
     }

@@ -15,7 +15,7 @@ public class Mission : BaseEntity
     public string DroneCode { get; set; } = string.Empty;
     public Guid ManagerId { get; set; }
     public Guid? UavId { get; set; }
-    public MissionStatus Status { get; set; } = MissionStatus.Pending;
+    public MissionStatus Status { get; set; } = MissionStatus.Draft;
     public MissionPriority Priority { get; set; } = MissionPriority.Normal;
     public InspectionObjective Objective { get; set; } = InspectionObjective.PeriodicInspection;
     public bool IsImmediate { get; set; } = false;
@@ -88,8 +88,8 @@ public class Mission : BaseEntity
 
     public void Start(DateTime? startTime = null)
     {
-        if (Status is not (MissionStatus.Ready or MissionStatus.Assigned or MissionStatus.Preparing))
-            throw new InvalidOperationException($"Cannot start mission with status {Status}. Mission must be Ready, Assigned, or Preparing.");
+        if (Status != MissionStatus.Ready)
+            throw new InvalidOperationException($"Cannot start mission with status {Status}. Mission must be Ready.");
         if (!AllRequiredAccepted())
             throw new InvalidOperationException("Cannot start mission before every required member has accepted.");
 
@@ -112,22 +112,23 @@ public class Mission : BaseEntity
 
     public void Suspend(string reason)
     {
-        if (Status is not (MissionStatus.Assigned or MissionStatus.Preparing or MissionStatus.Ready or MissionStatus.InProgress))
-            throw new InvalidOperationException($"Cannot suspend mission with status {Status}. Only active or preparing missions can be suspended.");
+        if (Status is not (MissionStatus.Pending or MissionStatus.Ready or MissionStatus.InProgress))
+            throw new InvalidOperationException($"Cannot suspend/postpone mission with status {Status}.");
 
-        Status = MissionStatus.Suspended;
+        Status = MissionStatus.Postponed;
+        PostponedAt = DateTime.UtcNow;
+        PostponeReason = reason;
         Version++;
         UpdatedAt = DateTime.UtcNow;
     }
 
     /// <summary>
-    /// Suspended → In Progress when the mission had started. Otherwise the status is recomputed: Pending Acceptance
-    /// while a required member has not accepted (BR-30, BR-32), else Assigned, Preparing or Ready (BR-37).
+    /// Postponed → InProgress when the mission had started. Otherwise recomputes Pending vs Ready based on acceptance.
     /// </summary>
     public void Resume(string? reason = null)
     {
-        if (Status != MissionStatus.Suspended)
-            throw new InvalidOperationException($"Cannot resume mission with status {Status}. Only Suspended missions can be resumed.");
+        if (Status != MissionStatus.Postponed)
+            throw new InvalidOperationException($"Cannot resume mission with status {Status}. Only Postponed missions can be resumed.");
 
         if (StartedAt != null)
         {
@@ -135,7 +136,7 @@ public class Mission : BaseEntity
         }
         else
         {
-            Status = MissionStatus.Assigned;
+            Status = MissionStatus.Pending;
             RecalculateReadiness();
         }
         Version++;
@@ -144,7 +145,7 @@ public class Mission : BaseEntity
 
     public void Postpone(string reason)
     {
-        if (Status is not (MissionStatus.PendingAcceptance or MissionStatus.Assigned or MissionStatus.Preparing or MissionStatus.Ready))
+        if (Status is not (MissionStatus.Pending or MissionStatus.Ready))
             throw new InvalidOperationException($"Cannot postpone mission with status {Status}.");
 
         Status = MissionStatus.Postponed;
@@ -156,7 +157,7 @@ public class Mission : BaseEntity
 
     public void Cancel()
     {
-        if (Status is not (MissionStatus.Draft or MissionStatus.PendingAcceptance or MissionStatus.Assigned or MissionStatus.Preparing or MissionStatus.Ready or MissionStatus.Postponed or MissionStatus.Suspended))
+        if (Status is MissionStatus.Completed or MissionStatus.Cancelled)
             throw new InvalidOperationException($"Cannot cancel mission with status {Status}.");
         
         Status = MissionStatus.Cancelled;
@@ -177,15 +178,14 @@ public class Mission : BaseEntity
     }
 
     /// <summary>
-    /// Pending Acceptance → Assigned when every active required assignment is Accepted (BR-30). Readiness is then
-    /// recomputed so check-ins and handovers made before a reassignment still count (BR-37).
+    /// Pending → Ready when every active required assignment is Accepted (BR-30).
     /// </summary>
     public bool CheckAcceptance()
     {
-        if (Status != MissionStatus.PendingAcceptance) return false;
+        if (Status != MissionStatus.Pending) return false;
         if (!AllRequiredAccepted()) return false;
 
-        Status = MissionStatus.Assigned;
+        Status = MissionStatus.Ready;
         AcceptedAt = DateTime.UtcNow;
         RecalculateReadiness();
         Version++;
@@ -194,14 +194,12 @@ public class Mission : BaseEntity
     }
 
     /// <summary>
-    /// BR-37 readiness of a mission that has not started. Required members must accept and check in; an optional
-    /// member must check in only once they have accepted. A required member who has not accepted sends the mission
-    /// back to Pending Acceptance (BR-32). Pending Acceptance itself only changes through <see cref="CheckAcceptance"/>;
-    /// Suspended, Postponed and final missions are left unchanged.
+    /// Recomputes Draft / Pending / Ready for a mission that has not started.
+    /// Returns true when all required & accepted members have checked in, targets are present, and the UAV is handed over.
     /// </summary>
     public bool RecalculateReadiness()
     {
-        if (Status is MissionStatus.Cancelled or MissionStatus.Completed or MissionStatus.InProgress or MissionStatus.Suspended or MissionStatus.Postponed)
+        if (Status is MissionStatus.Cancelled or MissionStatus.Completed or MissionStatus.InProgress or MissionStatus.Postponed)
             return false;
         if (StartedAt != null)
             return false;
@@ -216,17 +214,15 @@ public class Mission : BaseEntity
 
         if (!AllRequiredAccepted())
         {
-            Status = MissionStatus.PendingAcceptance;
+            Status = MissionStatus.Pending;
             return false;
         }
-        if (Status == MissionStatus.PendingAcceptance)
-            return CheckAcceptance() && Status == MissionStatus.Ready;
+        if (Status == MissionStatus.Pending)
+            return CheckAcceptance();
+
+        Status = MissionStatus.Ready;
         if (!hasUav)
-        {
-            // Without a UAV the team can be complete but nothing can be prepared (no handover).
-            Status = MissionStatus.Assigned;
             return false;
-        }
 
         bool CheckedIn(Guid userId) => CheckIns.Any(c => !c.IsDeleted && c.UserId == userId && c.Status == MissionCheckInStatus.CheckedIn);
         var mustCheckIn = active.Where(a => a.IsRequired || a.ResponseStatus == MissionAssignmentResponse.Accepted).ToList();
@@ -236,10 +232,6 @@ public class Mission : BaseEntity
             && MissionTargets.Count > 0
             && openHandover;
 
-        var anyProgress = openHandover || active.Any(a => CheckedIn(a.UserId));
-        Status = ready
-            ? MissionStatus.Ready
-            : anyProgress ? MissionStatus.Preparing : MissionStatus.Assigned;
         return ready;
     }
     #endregion

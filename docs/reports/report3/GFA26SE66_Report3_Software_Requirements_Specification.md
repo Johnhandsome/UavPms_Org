@@ -352,7 +352,7 @@ flowchart TD
     SCR24 -->|"Create"| DLG24
 ```
 
-**Figure 8.** *UAV-PMS screens flow. The draw.io version for the Word report is `report3_diagrams/Screen_Flow_Diagram_v0.5.drawio`.*
+**Figure 8.** *UAV-PMS screens flow. The draw.io version is `docs/diagrams/Screen_Flow_Diagram-Page-2.drawio.svg`.*
 
 #### 3.1.2 Screen Descriptions
 
@@ -2371,48 +2371,45 @@ Table 57 lists the system settings (UC-CF-08, BR-09) with their default values, 
 
 #### 5.4.2 State Tables
 
-The tables below define the allowed statuses and transitions referenced by BR-05.
+The tables below define the allowed statuses and transitions referenced by BR-05, fully synchronized with the domain state machines and database schema.
 
-**Table 58.** *Readiness assessment states.*
-
-| State | Meaning | Next states (trigger) |
-| :---- | :---- | :---- |
-| Draft | Created, not yet evaluated | Evaluating (UC-MF01-02) |
-| Evaluating | Created; evaluation running | Ready, Not Ready (UC-MF01-02) |
-| Ready | All components pass | Completed (UC-MF02-01), Expired (BR-17), Cancelled (UC-MF01-06), Ready/Not Ready (re-evaluation) |
-| Not Ready | At least one component fails | Ready/Not Ready (re-evaluation), Expired, Cancelled |
-| Completed | A mission was created from it | Ready or Expired when that mission is cancelled (BR-33) |
-| Expired | Validity or planned end passed | – (final) |
-| Cancelled | Cancelled by the manager | – (final) |
-
-**Table 59.** *Mission states.*
+**Table 58.** *Readiness assessment states (`PreMissionAssessmentStatus`).*
 
 | State | Meaning | Next states (trigger) |
 | :---- | :---- | :---- |
-| Pending Acceptance | Dispatched; waiting for the required members | Assigned (all required accepted), Postponed, Cancelled |
-| Assigned | All required members accepted | Preparing, Ready (BR-37), In Progress (UC-MF03-03), Suspended, Postponed, Cancelled |
-| Preparing | Some check-ins or handover done | Ready, In Progress, Suspended, Postponed, Cancelled |
-| Ready | All field preconditions met (BR-37) | In Progress, Suspended, Postponed, Cancelled, Pending Acceptance (reassignment) |
-| In Progress | Field execution running | Completed (UC-MF03-09), Suspended |
-| Suspended | Execution paused | In Progress, Ready or Assigned (resume), Cancelled |
-| Postponed | Postponed by the manager or a required member | Cancelled |
-| Completed | Field work finished | – (final) |
-| Cancelled | Mission cancelled; bookings cancelled | – (final) |
+| Evaluating | Created; evaluation pipeline is running against GIS, weather, personnel, and drone readiness | Ready, NotReady (automatic evaluation engine) |
+| Ready | All readiness criteria pass (feasibility score meets threshold) | Completed (mission created), Expired (validity window passed), Cancelled (cancelled by manager), Evaluating (re-evaluation triggered) |
+| NotReady | At least one feasibility check fails (e.g. weather risk, resource conflict) | Evaluating (re-evaluation triggered), Expired, Cancelled |
+| Completed | An inspection mission was successfully created and dispatched from this assessment | Cancelled or Expired if mission is revoked (BR-33) |
+| Expired | Assessment validity window or planned mission schedule has elapsed | – (final) |
+| Cancelled | Assessment manually cancelled by the mission manager | – (final) |
 
-*Draft is used only by the deprecated `POST /missions` endpoint.*
+**Table 59.** *Mission states (`MissionStatus`).*
+
+| State | Meaning | Next states (trigger) |
+| :---- | :---- | :---- |
+| Draft | Initial mission draft created by manager | Pending, Cancelled |
+| Pending | Dispatched; awaiting required team member responses/confirmations | Ready (all required accept), Postponed (postpone requested), Cancelled |
+| Ready | All required members accepted and field preconditions met; ready for flight | InProgress (field execution started), Postponed, Cancelled |
+| InProgress | Field inspection is actively running (drone in flight, telemetry streaming) | Completed (field inspection finished), Postponed, Cancelled |
+| Postponed | Mission execution paused or delayed due to weather, technical issue, or unavailability | Ready (resumed after delay), Cancelled |
+| Completed | Inspection mission completed; flight logs and media recorded | – (final) |
+| Cancelled | Mission cancelled by manager; all associated resource bookings released | – (final) |
+
+*Note: In the web client UI workflow, intermediate sub-stages (such as Assigned and Preparing) reflect operational steps within the Pending and Ready lifecycles.*
 
 **Table 60.** *Other state models.*
 
 | Object | States and transitions |
 | :------- | :------------------------------------ |
-| Assignment response | Pending → Accepted or Postponed; reassignment resets to Pending; a replaced or removed member becomes Replaced or Cancelled. The assignment record is Active, Unavailable or Revoked. |
+| Detected anomaly (`AnomalyReviewStatus`) | Pending → InReview → Confirmed (triggers maintenance ticket creation) or Rejected (dismissed defect). |
+| Maintenance ticket (`MaintenanceTicketStatus`) | Open → Assigned → InProgress → PendingVerification → Closed. |
+| Assignment response | Pending → Accepted or Postponed; reassignment resets to Pending; a replaced member becomes Replaced or Cancelled. |
 | Resource booking | Active → Released (mission completed, member replaced) or Cancelled (mission cancelled, member or UAV removed). |
-| Technical inspection | Pending → In Progress → Passed, Failed or Incomplete; technical health Unknown, Healthy, Warning or Critical. |
+| Technical inspection | Pending → InProgress → Passed, Failed or Incomplete; technical health Unknown, Healthy, Warning or Critical. |
 | UAV handover | Accepted or Rejected → Returned. |
 | AI analysis request | Pending → Processing → Completed or Failed. |
-| Detection | Pending → Confirmed or Rejected (re-review allowed) → Resolved (ticket closed). |
 | Emergency alert | Active → Confirmed, Dismissed or Escalated. |
-| Maintenance ticket | Open → In Progress → Pending Verification → Closed (Resolved is also accepted as a final status). |
 | Report | Draft → Pending → Approved; Pending → Draft on rejection. |
 
 #### 5.4.3 Defect Categories

@@ -122,7 +122,7 @@ public class CreateMissionFromAssessmentTests
         await using (var db = _pg.CreateContext())
         {
             var saved = await db.Missions.Include(m => m.MissionTargets).Include(m => m.Assignments).SingleAsync(m => m.Id == mission.Id);
-            saved.Status.Should().Be(MissionStatus.PendingAcceptance);
+            saved.Status.Should().Be(MissionStatus.Pending);
             saved.MissionTargets.Should().HaveCount(2);
             saved.Assignments.Should().HaveCount(2);
             (await db.PreMissionAssessments.SingleAsync(a => a.Id == assessmentId)).Status.Should().Be(PreMissionAssessmentStatus.Completed);

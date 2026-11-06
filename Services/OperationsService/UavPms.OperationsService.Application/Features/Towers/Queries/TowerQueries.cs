@@ -41,7 +41,7 @@ public sealed class GetTowersQueryValidator : AbstractValidator<GetTowersQuery>
 public sealed class GetTowerHistoryQueryValidator : AbstractValidator<GetTowerHistoryQuery>
 {
     /// <summary>detected_anomalies.validation_status values.</summary>
-    public static readonly string[] ValidationStatuses = ["Pending", "Confirmed", "Rejected", "Resolved"];
+    public static readonly string[] ValidationStatuses = ["Pending", "InReview", "Confirmed", "Rejected"];
 
     public GetTowerHistoryQueryValidator()
     {
@@ -130,9 +130,9 @@ public class GetTowerHistoryQueryHandler : IRequestHandler<GetTowerHistoryQuery,
 
         int AnomalyCount(string status) => anomalyCounts.TryGetValue(status, out var n) ? n : 0;
         int TicketCount(TicketStatus status) => ticketCounts.TryGetValue(status, out var n) ? n : 0;
-        var pending = AnomalyCount("Pending");
+        var pending = AnomalyCount("Pending") + AnomalyCount("InReview");
         var confirmed = AnomalyCount("Confirmed");
-        var openTickets = TicketCount(TicketStatus.Open);
+        var openTickets = TicketCount(TicketStatus.Open) + TicketCount(TicketStatus.Assigned);
         var inProgressTickets = TicketCount(TicketStatus.InProgress) + TicketCount(TicketStatus.PendingVerification);
         var stats = new TowerHistoryStatsDto(
             anomalyCounts.Values.Sum(),

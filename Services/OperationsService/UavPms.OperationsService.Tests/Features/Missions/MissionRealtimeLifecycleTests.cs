@@ -56,7 +56,7 @@ public class MissionRealtimeLifecycleTests
             MissionCode = "MS-CONFIRM-01",
             Title = "Mission Pending Acceptance",
             ManagerId = managerId,
-            Status = MissionStatus.PendingAcceptance
+            Status = MissionStatus.Pending
         };
         mission.Assignments.Add(new MissionAssignment
         {
@@ -77,7 +77,7 @@ public class MissionRealtimeLifecycleTests
         var result = await service.ConfirmMissionAsync(mission.Id, "Đã sẵn sàng thực hiện", CancellationToken.None);
 
         // Assert
-        result.Status.Should().Be(MissionStatus.Confirmed);
+        result.Status.Should().Be(MissionStatus.Ready);
         notifierMock.Verify(n => n.NotifyAsync(
             It.Is<MissionLifecycleEventDto>(e => e.MissionId == mission.Id.ToString() && e.Type == "CONFIRMED"),
             It.IsAny<CancellationToken>()), Times.Once);
@@ -126,7 +126,7 @@ public class MissionRealtimeLifecycleTests
 
         // Act - Suspend
         var suspended = await service.SuspendMissionAsync(mission.Id, "Thời tiết xấu, gió to", CancellationToken.None);
-        suspended.Status.Should().Be(MissionStatus.Suspended);
+        suspended.Status.Should().Be(MissionStatus.Postponed);
         notifierMock.Verify(n => n.NotifyAsync(
             It.Is<MissionLifecycleEventDto>(e => e.MissionId == mission.Id.ToString() && e.Type == "SUSPENDED"),
             It.IsAny<CancellationToken>()), Times.Once);
@@ -201,7 +201,7 @@ public class MissionRealtimeLifecycleTests
             Title = "Mission to Cancel",
             ManagerId = managerId,
             RegionId = regionId,
-            Status = MissionStatus.Assigned
+            Status = MissionStatus.Ready
         };
         mission.Assignments.Add(new MissionAssignment
         {
@@ -247,7 +247,7 @@ public class MissionRealtimeLifecycleTests
             Title = "Mission Pending Acceptance",
             ManagerId = managerId,
             RegionId = regionId,
-            Status = MissionStatus.PendingAcceptance,
+            Status = MissionStatus.Pending,
             ConfirmationDeadline = DateTime.UtcNow.AddHours(2)
         };
         mission.Assignments.Add(new MissionAssignment
@@ -296,7 +296,7 @@ public class MissionRealtimeLifecycleTests
             MissionCode = "MS-COMM-01",
             Title = "Mission Communication Test",
             ManagerId = managerId,
-            Status = MissionStatus.Assigned
+            Status = MissionStatus.Ready
         };
         mission.Assignments.Add(new MissionAssignment
         {

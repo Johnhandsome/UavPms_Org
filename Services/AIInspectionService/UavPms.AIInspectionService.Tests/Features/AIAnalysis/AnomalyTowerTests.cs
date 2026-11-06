@@ -115,9 +115,10 @@ public class AnomalyTowerTests
     }
 
     [Theory]
-    [InlineData("Resolved", false, "ANOMALY_RESOLVED")]
+    [InlineData("Confirmed", false, "ANOMALY_FINALIZED")]
+    [InlineData("Rejected", false, "ANOMALY_FINALIZED")]
     [InlineData("Pending", true, "ANOMALY_SUPERSEDED")]
-    public async Task Assign_RejectsResolvedOrSupersededAnomaly(string status, bool superseded, string expectedCode)
+    public async Task Assign_RejectsFinalizedOrSupersededAnomaly(string status, bool superseded, string expectedCode)
     {
         await using var db = CreateContext();
         var tower = NewTower("T-1", Lat, Lng);

@@ -233,10 +233,10 @@ public class EndToEndMf01ToMf04WorkflowTests
 
         var dispatchResult = await dispatchHandler.Handle(
             new DispatchMissionCommand(mission.Id), CancellationToken.None);
-        dispatchResult.Status.Should().Be("Assigned");
+        dispatchResult.Status.Should().Be("Ready");
 
         var updatedMission = await db.Missions.FindAsync(mission.Id);
-        updatedMission!.Status.Should().Be(MissionStatus.Assigned);
+        updatedMission!.Status.Should().Be(MissionStatus.Ready);
 
         // =========================================================================
         // BƯỚC 3: MF03 - BÀN GIAO DRONE, CHECK-IN HIỆN TRƯỜNG & NẠP MEDIA

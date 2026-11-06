@@ -45,7 +45,7 @@ public class MissionRepositoryTests
             MissionCode = "MSN-REVOKED",
             Title = "Revoked Mission",
             ManagerId = managerId,
-            Status = MissionStatus.PendingAcceptance
+            Status = MissionStatus.Pending
         };
         mission1.Assignments.Add(new MissionAssignment
         {
@@ -64,7 +64,7 @@ public class MissionRepositoryTests
             MissionCode = "MSN-ACTIVE",
             Title = "Active Mission",
             ManagerId = managerId,
-            Status = MissionStatus.Assigned
+            Status = MissionStatus.Ready
         };
         mission2.Assignments.Add(new MissionAssignment
         {

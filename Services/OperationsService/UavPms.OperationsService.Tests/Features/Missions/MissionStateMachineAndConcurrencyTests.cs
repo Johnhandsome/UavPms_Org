@@ -145,7 +145,7 @@ public class MissionStateMachineAndConcurrencyTests
             Title = "Suspended Mission",
             RegionId = regionId,
             ManagerId = managerId,
-            Status = MissionStatus.Suspended
+            Status = MissionStatus.Postponed
         };
         db.Missions.Add(mission);
         await db.SaveChangesAsync();
@@ -164,7 +164,7 @@ public class MissionStateMachineAndConcurrencyTests
         var suspendedMission = new Mission
         {
             Id = Guid.NewGuid(),
-            Status = MissionStatus.Suspended,
+            Status = MissionStatus.Postponed,
             UavId = Guid.NewGuid()
         };
 
@@ -176,7 +176,7 @@ public class MissionStateMachineAndConcurrencyTests
         };
 
         suspendedMission.RecalculateReadiness().Should().BeFalse();
-        suspendedMission.Status.Should().Be(MissionStatus.Suspended);
+        suspendedMission.Status.Should().Be(MissionStatus.Postponed);
 
         postponedMission.RecalculateReadiness().Should().BeFalse();
         postponedMission.Status.Should().Be(MissionStatus.Postponed);
@@ -202,7 +202,7 @@ public class MissionStateMachineAndConcurrencyTests
             Id = Guid.NewGuid(),
             Title = "Mission Concurrency Test",
             ManagerId = managerId,
-            Status = MissionStatus.PendingAcceptance,
+            Status = MissionStatus.Pending,
             Version = 5
         };
 
@@ -244,7 +244,7 @@ public class MissionStateMachineAndConcurrencyTests
         var updatedMission = await db.Missions.FindAsync(mission.Id);
         updatedMission!.Version.Should().Be(6);
         // And mission should still be PendingAcceptance because assignment2 has not accepted yet
-        updatedMission.Status.Should().Be(MissionStatus.PendingAcceptance);
+        updatedMission.Status.Should().Be(MissionStatus.Pending);
     }
 
     #endregion

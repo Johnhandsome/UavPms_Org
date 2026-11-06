@@ -132,9 +132,9 @@ public class MaintenanceTicketService : IMaintenanceTicketService
             .FirstOrDefaultAsync(t => t.Id == ticketId && !t.IsDeleted, ct)
             ?? throw new NotFoundException("Maintenance ticket not found");
 
-        if (ticket.Status != TicketStatus.Open)
+        if (ticket.Status is not (TicketStatus.Open or TicketStatus.Assigned))
         {
-            throw new BusinessRuleException("TICKET_NOT_OPEN", $"Only open tickets can be (re)assigned; this ticket is '{ticket.Status}'.");
+            throw new BusinessRuleException("TICKET_NOT_OPEN", $"Only open or assigned tickets can be (re)assigned; this ticket is '{ticket.Status}'.");
         }
 
         if (request.DueDate.HasValue && request.DueDate.Value < DateTime.UtcNow.AddMinutes(-5))
@@ -143,9 +143,10 @@ public class MaintenanceTicketService : IMaintenanceTicketService
         }
 
         var tech = await LoadTechnicianAsync(request.TechnicianId, ct);
-        var old = new { ticket.TechnicianId, ticket.DueDate };
+        var old = new { ticket.TechnicianId, ticket.DueDate, ticket.Status };
 
         ticket.TechnicianId = tech.Id;
+        ticket.Status = TicketStatus.Assigned;
         ticket.DueDate = request.DueDate ?? ticket.DueDate;
         ticket.AssignedAt = DateTime.UtcNow;
         ticket.UpdatedAt = DateTime.UtcNow;
@@ -192,7 +193,7 @@ public class MaintenanceTicketService : IMaintenanceTicketService
                 FullName = u.FullName,
                 Email = u.Email,
                 ActiveTicketCount = _db.MaintenanceTickets.Count(t => t.TechnicianId == u.Id && !t.IsDeleted &&
-                    t.Status != TicketStatus.Closed && t.Status != TicketStatus.Resolved)
+                    t.Status != TicketStatus.Closed)
             })
             .ToListAsync(ct);
     }
@@ -233,23 +234,47 @@ public class MaintenanceTicketService : IMaintenanceTicketService
         EnsureTechnicianOrAdminAccess(ticket);
 
         // Terminal State Guard
-        if (ticket.Status == TicketStatus.Closed || ticket.Status == TicketStatus.Resolved)
+        if (ticket.Status == TicketStatus.Closed)
         {
             throw new BusinessRuleException("Cannot modify status of an already closed ticket");
         }
 
-        if (string.Equals(newStatus, "InProgress", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(newStatus, "Assigned", StringComparison.OrdinalIgnoreCase))
         {
-            if (ticket.Status != TicketStatus.Open)
+            if (ticket.Status is not (TicketStatus.Open or TicketStatus.Assigned))
             {
-                throw new BusinessRuleException($"Cannot start progress on ticket in status '{ticket.Status}'. Must be Open.");
+                throw new BusinessRuleException($"Cannot assign ticket in status '{ticket.Status}'. Must be Open.");
             }
             if (ticket.TechnicianId == null)
             {
-                throw new BusinessRuleException("Cannot start progress on a ticket that has no technician assigned.");
+                throw new BusinessRuleException("Cannot transition ticket to Assigned without a technician assigned.");
             }
-            ticket.Status = TicketStatus.InProgress;
-            ticket.StartedAt = DateTime.UtcNow;
+            ticket.Status = TicketStatus.Assigned;
+            ticket.AssignedAt ??= DateTime.UtcNow;
+        }
+        else if (string.Equals(newStatus, "InProgress", StringComparison.OrdinalIgnoreCase))
+        {
+            if (ticket.Status == TicketStatus.PendingVerification)
+            {
+                if (!IsManagerOrAdmin())
+                {
+                    throw new ForbiddenException("TICKET_REJECT_REQUIRES_MANAGER: Only a Manager or SystemAdmin can reject verification and return a ticket to InProgress.");
+                }
+                ticket.Status = TicketStatus.InProgress;
+            }
+            else if (ticket.Status is TicketStatus.Open or TicketStatus.Assigned)
+            {
+                if (ticket.TechnicianId == null)
+                {
+                    throw new BusinessRuleException("Cannot start progress on a ticket that has no technician assigned.");
+                }
+                ticket.Status = TicketStatus.InProgress;
+                ticket.StartedAt ??= DateTime.UtcNow;
+            }
+            else
+            {
+                throw new BusinessRuleException($"Cannot start progress on ticket in status '{ticket.Status}'. Must be Open or Assigned.");
+            }
         }
         else if (string.Equals(newStatus, "PendingVerification", StringComparison.OrdinalIgnoreCase))
         {
@@ -264,7 +289,7 @@ public class MaintenanceTicketService : IMaintenanceTicketService
             }
             ticket.Status = TicketStatus.PendingVerification;
         }
-        else if (string.Equals(newStatus, "Closed", StringComparison.OrdinalIgnoreCase) || string.Equals(newStatus, "Resolved", StringComparison.OrdinalIgnoreCase))
+        else if (string.Equals(newStatus, "Closed", StringComparison.OrdinalIgnoreCase))
         {
             // Closing is the manager's acceptance step: same rules, audit and anomaly update as PUT /close.
             if (!IsManagerOrAdmin())
@@ -465,14 +490,6 @@ public class MaintenanceTicketService : IMaintenanceTicketService
         ticket.ResolvedAt = DateTime.UtcNow;
         ticket.UpdatedAt = DateTime.UtcNow;
 
-        // Auto-resolve linked anomaly
-        var anomaly = await _db.DetectedAnomalies.FirstOrDefaultAsync(a => a.Id == ticket.AnomalyId, ct);
-        if (anomaly != null)
-        {
-            anomaly.ValidationStatus = "Resolved";
-            anomaly.UpdatedAt = DateTime.UtcNow;
-        }
-
         // Audit Log
         _db.AuditLogs.Add(new AuditLog
         {
@@ -481,7 +498,7 @@ public class MaintenanceTicketService : IMaintenanceTicketService
             TableName = "MaintenanceTickets",
             RecordId = ticket.Id,
             ActionType = "TicketClosed",
-            NewValues = JsonSerializer.Serialize(new { ticket.TicketCode, Status = "Resolved", ResolvedAt = ticket.ResolvedAt }),
+            NewValues = JsonSerializer.Serialize(new { ticket.TicketCode, Status = "Closed", ResolvedAt = ticket.ResolvedAt }),
             OldValues = JsonSerializer.Serialize(new { ticket.TicketCode, Status = oldStatus }),
             IpAddress = _currentUser.IpAddress ?? "",
             UserAgent = _currentUser.UserAgent ?? "",
@@ -642,7 +659,7 @@ public class MaintenanceTicketService : IMaintenanceTicketService
     /// <summary>Proofs and materials belong to the repair, so they are only accepted while the ticket is open for work.</summary>
     private static void EnsureTicketEditable(MaintenanceTicket ticket)
     {
-        if (ticket.Status is TicketStatus.Closed or TicketStatus.Resolved)
+        if (ticket.Status == TicketStatus.Closed)
         {
             throw new BusinessRuleException("TICKET_CLOSED", "The ticket is already closed.");
         }

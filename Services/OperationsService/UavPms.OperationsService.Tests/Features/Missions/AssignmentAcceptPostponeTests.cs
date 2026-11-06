@@ -48,7 +48,7 @@ public class AssignmentAcceptPostponeTests
             Id = Guid.NewGuid(),
             Title = "Mission Pending Acceptance",
             ManagerId = managerId,
-            Status = MissionStatus.PendingAcceptance
+            Status = MissionStatus.Pending
         };
 
         var assignment = new MissionAssignment
@@ -72,7 +72,7 @@ public class AssignmentAcceptPostponeTests
         result.RespondedAt.Should().NotBeNull();
 
         var updatedMission = await db.Missions.FindAsync(mission.Id);
-        updatedMission!.Status.Should().Be(MissionStatus.Assigned);
+        updatedMission!.Status.Should().Be(MissionStatus.Ready);
         updatedMission.AcceptedAt.Should().NotBeNull();
     }
 
@@ -92,7 +92,7 @@ public class AssignmentAcceptPostponeTests
             Id = Guid.NewGuid(),
             Title = "Mission Test Postpone",
             ManagerId = managerId,
-            Status = MissionStatus.PendingAcceptance
+            Status = MissionStatus.Pending
         };
 
         var assignment = new MissionAssignment
@@ -141,7 +141,7 @@ public class AssignmentAcceptPostponeTests
             Id = Guid.NewGuid(),
             Title = "Mission CheckIn Test",
             ManagerId = managerId,
-            Status = MissionStatus.Assigned
+            Status = MissionStatus.Ready
         };
 
         var assignment = new MissionAssignment
@@ -184,7 +184,7 @@ public class AssignmentAcceptPostponeTests
             Title = "Mission Cancel Test",
             ManagerId = managerId,
             RegionId = region.Id,
-            Status = MissionStatus.PendingAcceptance
+            Status = MissionStatus.Pending
         };
         mission.Assignments.Add(new MissionAssignment { UserId = inspectorId, Status = MissionAssignmentStatus.Active });
         db.Missions.Add(mission);
@@ -245,7 +245,7 @@ public class AssignmentAcceptPostponeTests
             Title = "Mission Reassign Conflict Test",
             ManagerId = managerId,
             RegionId = region.Id,
-            Status = MissionStatus.Assigned,
+            Status = MissionStatus.Ready,
             PlannedStart = start,
             PlannedEnd = end
         };
@@ -270,7 +270,7 @@ public class AssignmentAcceptPostponeTests
             Title = "Conflicting Mission",
             ManagerId = managerId,
             RegionId = region.Id,
-            Status = MissionStatus.Assigned,
+            Status = MissionStatus.Ready,
             PlannedStart = start.AddHours(-1),
             PlannedEnd = start.AddHours(2)
         };
@@ -326,7 +326,7 @@ public class AssignmentAcceptPostponeTests
             Title = "Mission Reassign Success Test",
             ManagerId = managerId,
             RegionId = region.Id,
-            Status = MissionStatus.Assigned,
+            Status = MissionStatus.Ready,
             PlannedStart = start,
             PlannedEnd = end,
             AssignedToUserId = originalInspectorId
@@ -369,7 +369,7 @@ public class AssignmentAcceptPostponeTests
         reassigned.ResponseStatus.Should().Be(MissionAssignmentResponse.Pending);
 
         var updatedMission = await db.Missions.FindAsync(mission.Id);
-        updatedMission!.Status.Should().Be(MissionStatus.PendingAcceptance);
+        updatedMission!.Status.Should().Be(MissionStatus.Pending);
         updatedMission.AssignedToUserId.Should().Be(replacementInspectorId);
         updatedMission.PrimaryInspectorId().Should().Be(replacementInspectorId);
 

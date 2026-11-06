@@ -106,7 +106,7 @@ public class MissionResourceConflictTests
 
         await w.CreateMissionAsync(Hour(2), Hour(4), inspector, drone);
         var second = await w.CreateMissionAsync(Hour(4), Hour(6), inspector, drone);
-        second.Status.Should().Be(MissionStatus.PendingAcceptance);
+        second.Status.Should().Be(MissionStatus.Pending);
 
         var overlap = () => w.CreateMissionAsync(Hour(5), Hour(7), inspector, drone);
         (await overlap.Should().ThrowAsync<BusinessRuleException>()).Which.Code.Should().Be("RESOURCE_BOOKING_CONFLICT");
@@ -263,7 +263,7 @@ public class MissionResourceConflictTests
         await w.AsManager(s => s.SuspendMissionAsync(mission.Id, "Weather", default));
 
         var inProgressCancel = await w.LoadMissionAsync(mission.Id);
-        inProgressCancel.Status.Should().Be(MissionStatus.Suspended);
+        inProgressCancel.Status.Should().Be(MissionStatus.Postponed);
         await w.AsManager(s => s.CancelMissionAsync(mission.Id, "Storm", default));
 
         var cancelled = await w.LoadMissionAsync(mission.Id);
@@ -277,7 +277,7 @@ public class MissionResourceConflictTests
 
         // The UAV and the inspector are free again for the same window.
         var again = await w.CreateMissionAsync(Hour(0), Hour(2), inspector, drone);
-        again.Status.Should().Be(MissionStatus.PendingAcceptance);
+        again.Status.Should().Be(MissionStatus.Pending);
     }
 
     [Fact]
@@ -303,7 +303,7 @@ public class MissionResourceConflictTests
         }
         (await w.Read(db => db.ResourceBookings.Where(b => b.MissionId == draftId).Select(b => b.Status).SingleAsync())).Should().Be(ResourceBookingStatus.Cancelled);
         var mission = await w.CreateMissionAsync(Hour(2), Hour(4), inspector, drone);
-        mission.Status.Should().Be(MissionStatus.PendingAcceptance);
+        mission.Status.Should().Be(MissionStatus.Pending);
 
         // A booking left Active by a mission deleted before this fix is still seen by the application check.
         var drone2 = await w.AddDroneAsync();

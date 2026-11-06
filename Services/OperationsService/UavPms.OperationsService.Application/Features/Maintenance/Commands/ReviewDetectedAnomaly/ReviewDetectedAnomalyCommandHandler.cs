@@ -49,9 +49,10 @@ public class ReviewDetectedAnomalyCommandHandler : IRequestHandler<ReviewDetecte
         var isApproved = string.Equals(request.Status, "Approved", StringComparison.OrdinalIgnoreCase) ||
                          string.Equals(request.Status, "Confirmed", StringComparison.OrdinalIgnoreCase);
         var isRejected = string.Equals(request.Status, "Rejected", StringComparison.OrdinalIgnoreCase);
+        var isInReview = string.Equals(request.Status, "InReview", StringComparison.OrdinalIgnoreCase);
 
-        if (!isApproved && !isRejected)
-            throw new BusinessRuleException("INVALID_STATUS", "Status must be either 'Confirmed' (or Approved) or 'Rejected'.");
+        if (!isApproved && !isRejected && !isInReview)
+            throw new BusinessRuleException("INVALID_STATUS", "Status must be 'InReview', 'Confirmed' (or Approved), or 'Rejected'.");
 
         if (isApproved && !anomaly.TowerId.HasValue)
         {
@@ -62,7 +63,7 @@ public class ReviewDetectedAnomalyCommandHandler : IRequestHandler<ReviewDetecte
                 throw new BusinessRuleException("TOWER_REQUIRED", "The anomaly must be linked to a tower before it can be confirmed.");
         }
 
-        anomaly.ValidationStatus = isApproved ? "Confirmed" : "Rejected";
+        anomaly.ValidationStatus = isApproved ? "Confirmed" : (isRejected ? "Rejected" : "InReview");
         anomaly.AnalystId = _currentUser.UserId;
         anomaly.AnalystNotes = request.ReviewNotes ?? string.Empty;
         anomaly.AnalystFeedback = !string.IsNullOrWhiteSpace(request.AnalystFeedbackJson) ? request.AnalystFeedbackJson : "{}";

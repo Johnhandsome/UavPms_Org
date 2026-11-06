@@ -38,10 +38,11 @@ public class AssignAnomalyTowerCommandHandler : IRequestHandler<AssignAnomalyTow
             throw new BusinessRuleException("ANOMALY_SUPERSEDED",
                 $"The anomaly was superseded by {anomaly.SupersededById}; assign the tower on that anomaly instead.");
         }
-        // A resolved anomaly is closed maintenance history: moving it would rewrite another tower's history.
-        if (string.Equals(anomaly.ValidationStatus, "Resolved", StringComparison.OrdinalIgnoreCase))
+        // A confirmed or rejected anomaly is finalized: moving it would rewrite another tower's history.
+        if (string.Equals(anomaly.ValidationStatus, "Confirmed", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(anomaly.ValidationStatus, "Rejected", StringComparison.OrdinalIgnoreCase))
         {
-            throw new BusinessRuleException("ANOMALY_RESOLVED", "The tower of a resolved anomaly cannot be changed.");
+            throw new BusinessRuleException("ANOMALY_FINALIZED", "The tower of a confirmed or rejected anomaly cannot be changed.");
         }
 
         var tower = await _towerRepository.GetByIdAsync(request.TowerId, false, cancellationToken);

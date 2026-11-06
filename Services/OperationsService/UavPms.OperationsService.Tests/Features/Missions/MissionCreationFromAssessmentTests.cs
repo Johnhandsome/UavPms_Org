@@ -87,7 +87,7 @@ public class MissionCreationFromAssessmentTests
         var mission = await service.CreateMissionFromAssessmentAsync(request, CancellationToken.None);
 
         mission.Should().NotBeNull();
-        mission.Status.Should().Be(MissionStatus.PendingAcceptance);
+        mission.Status.Should().Be(MissionStatus.Pending);
         mission.PreMissionAssessmentId.Should().Be(assessment.Id);
         mission.UavId.Should().Be(drone.Id);
         mission.Assignments.Should().HaveCount(1);

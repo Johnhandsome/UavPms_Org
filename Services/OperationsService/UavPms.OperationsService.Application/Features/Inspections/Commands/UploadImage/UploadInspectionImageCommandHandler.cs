@@ -144,7 +144,7 @@ public class UploadInspectionImageCommandHandler
         }
 
         // 1b. State Machine Guard: Không cho phép nạp dữ liệu kiểm tra khi nhiệm vụ chưa thực thi hoặc bị hủy
-        if (mission.Status is MissionStatus.Draft or MissionStatus.PendingAcceptance)
+        if (mission.Status is MissionStatus.Draft or MissionStatus.Pending)
         {
             throw new BusinessRuleException("MISSION_NOT_EXECUTING_OR_COMPLETED", "Cannot upload inspection media before the mission is executing or completed.");
         }

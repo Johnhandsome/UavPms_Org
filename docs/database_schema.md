@@ -1,6 +1,6 @@
 # Tài liệu Thiết kế Cơ sở Dữ liệu (Database Schema Documentation)
 **Hệ thống Quản lý và Giám sát Lưới điện bằng Thiết bị bay không người lái (UAV PMS)**
-*Phiên bản ERD v2.2 (42 bảng). Đồng bộ với `docs/reports/report3/report3_diagrams/ERD_Full_v2.mmd` và `ERD_Full_v2_CHANGES.md` cùng thư mục. Hợp đồng tên vật lý: `docs/database/ERD_v2_2_TARGET_SCHEMA.md`.*
+*Phiên bản ERD v2.2 (42 bảng). Đồng bộ với `docs/diagrams/ERD_Full_v2.mmd` và `docs/diagrams/ERD_Full_v2_CHANGES.md`. Hợp đồng tên vật lý: `docs/database/ERD_v2_2_TARGET_SCHEMA.md`.*
 
 ---
 
@@ -328,7 +328,7 @@ Người tạo lấy từ cột audit `created_by` (không còn `created_by_user
 | `id` | `uuid` | PK | ID hồ sơ |
 | `manager_id` | `uuid` | FK → `users(id)` | Người lập |
 | `region_id` | `uuid` | FK → `regions(id)` | Khu vực đánh giá |
-| `status` | `varchar(20)` | CHECK | `AssessmentStatus`: `Draft`, `Evaluating`, `Ready`, `NotReady`, `Expired`, `Completed`, `Cancelled` |
+| `status` | `varchar(20)` | CHECK | `AssessmentStatus`: `Evaluating`, `Ready`, `NotReady`, `Expired`, `Completed`, `Cancelled` |
 | `site_feasibility_status` | `varchar(20)` | | Kết quả khả thi hiện trường |
 | `overall_technical_health` | `varchar(20)` | | Sức khỏe kỹ thuật tổng hợp của đội drone ứng viên |
 | `planned_start` | `timestamptz` | | Bắt đầu dự kiến |
@@ -397,7 +397,7 @@ Cột `is_eligible` đã bỏ ở cả hai bảng con, suy ra từ các cột tr
 | `objective` | `varchar(30)` | Default `PeriodicInspection` | `InspectionObjective`: `PeriodicInspection`, `TargetedReinspection`, `IncidentFollowUp`, `EmergencyInspection` |
 | `mission_type` | `varchar(20)` | | `Scheduled`, `AdHoc` |
 | `priority` | `smallint` | Default 0 | `0` Normal, `1` High, `2` Emergency |
-| `status` | `varchar(30)` | | `MissionStatus`: `Draft`, `PendingAcceptance`, `Assigned`, `Preparing`, `Ready`, `InProgress`, `Suspended`, `Postponed`, `Completed`, `Cancelled` |
+| `status` | `varchar(30)` | | `MissionStatus`: `Draft`, `Pending`, `Ready`, `Postponed`, `InProgress`, `Completed`, `Cancelled` |
 | `manager_id` | `uuid` | FK → `users(id)` | Quản lý phụ trách |
 | `uav_id` | `uuid` | FK → `uavs(id)`, Nullable | Drone chính thức |
 | `region_id` | `uuid` | FK → `regions(id)`, Nullable | Khu vực của nhiệm vụ |
@@ -609,7 +609,7 @@ Index duy nhất `IX_AIAnalysisRuns_ActiveLogicalAnalysis` trên `(media_id, ana
 | `location` | `geometry(Point, 4326)` | Nullable | Vị trí lỗi (trước đây `gps jsonb`) |
 | `image_url` | `varchar(2048)` | | Ảnh gốc có bounding box |
 | `crop_url` | `varchar(2048)` | | Ảnh cắt vùng lỗi |
-| `validation_status` | `varchar(20)` | | `AnomalyStatus`: `Pending`, `Confirmed`, `Rejected`, `Resolved` |
+| `validation_status` | `varchar(20)` | | `AnomalyStatus`: `Pending`, `InReview`, `Confirmed`, `Rejected` |
 | `analyst_notes` | `text` | | Ghi chú thẩm định |
 | `analyst_feedback` | `jsonb` | | Hiệu chỉnh có cấu trúc của analyst |
 | `validated_at` | `timestamptz` | | Thời điểm thẩm định |
@@ -657,7 +657,7 @@ Cột điện, nhiệm vụ của cảnh báo suy ra qua `anomaly_id → detecte
 | `anomaly_id` | `uuid` | FK → `detected_anomalies(id)` | Bất thường cần sửa; cột điện = `detected_anomalies.tower_id` |
 | `manager_id` | `uuid` | FK → `users(id)` | Quản lý giao phiếu |
 | `technician_id` | `uuid` | FK → `users(id)`, Nullable | Kỹ thuật viên nhận việc. NULL = chưa giao (phiếu tự sinh khi duyệt bất thường), phiếu giữ trạng thái `Open` đến khi có kỹ thuật viên |
-| `status` | `varchar(30)` | | `TicketStatus`: `Open`, `InProgress`, `PendingVerification`, `Resolved`, `Closed` |
+| `status` | `varchar(30)` | | `TicketStatus`: `Open`, `Assigned`, `InProgress`, `PendingVerification`, `Closed` |
 | `priority` | `varchar(20)` | | `Low`, `Medium`, `High`, `Emergency` |
 | `description` | `text` | | Yêu cầu sửa chữa |
 | `due_date` | `timestamptz` | | Hạn hoàn thành |

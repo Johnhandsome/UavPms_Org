@@ -61,7 +61,7 @@ public class Phase2FieldExecutionCqrsTests
         var mission = new Mission
         {
             Id = Guid.NewGuid(),
-            Status = MissionStatus.Assigned,
+            Status = MissionStatus.Ready,
             Assignments = new List<MissionAssignment>
             {
                 new()
@@ -120,7 +120,7 @@ public class Phase2FieldExecutionCqrsTests
         var mission = new Mission
         {
             Id = Guid.NewGuid(),
-            Status = MissionStatus.Assigned,
+            Status = MissionStatus.Ready,
             Assignments = new List<MissionAssignment>
             {
                 new()

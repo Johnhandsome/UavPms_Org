@@ -1,6 +1,6 @@
 # 📋 TÀI LIỆU ĐẶC TẢ API (API SPECIFICATION) - UAV-PMS SYSTEM
 **Hệ thống Quản lý và Giám sát Lưới điện bằng Thiết bị bay không người lái (UAV PMS)**
-*Phiên bản ERD v2.2: Hợp nhất MF01 - MF04. Mô hình dữ liệu đồng bộ với `docs/reports/report3/report3_diagrams/ERD_Full_v2.mmd` (xem thêm `docs/database_schema.md`).*
+*Phiên bản ERD v2.2: Hợp nhất MF01 - MF04. Mô hình dữ liệu đồng bộ với `docs/diagrams/ERD_Full_v2.mmd` (xem thêm `docs/database_schema.md`).*
 
 ---
 
@@ -494,8 +494,7 @@ graph TD
 
 > Route gốc là `/api/v1/pre-mission-assessments` (cũng nhận `/api/v2/...`). Controller v0.9 cũ đã deprecated.
 > Phân quyền mặc định: `SystemAdmin`, `Manager`, `Inspector`. Endpoint trả DTO trực tiếp (không bọc `ApiResponse`).
-> Trạng thái hồ sơ: `Draft` → `Evaluating` → `Ready` / `NotReady` → `Completed`; ngoài ra `Expired`, `Cancelled`.
-> Giá trị cũ `Consumed` = `Completed`, `Incomplete` = `NotReady`.
+> Trạng thái hồ sơ: `Evaluating` → `Ready` / `NotReady` → `Completed`; ngoài ra `Expired`, `Cancelled`.
 
 #### 4.1. [POST] `/api/v1/pre-mission-assessments`
 - **Mô tả**: Tạo hồ sơ đánh giá tiền khả thi cho một chiến dịch bay dự kiến.
@@ -572,11 +571,11 @@ graph TD
 - **Quy tắc** (BR-18 – BR-20, BR-25 – BR-31):
   - `personnel`: ít nhất 1 người, **không trùng `userId`**, ít nhất 1 người `isRequired: true`. Mỗi người được kiểm tra lại lúc tạo (không chỉ dựa vào ảnh chụp ứng viên): tài khoản Active và đã xác thực, có vai trò hiện trường (Inspector/Analyst/Technician), không có vai trò Manager/SystemAdmin, thuộc phạm vi vùng, không trùng lịch.
   - `droneIds`: **đúng 1 UAV** (nhiệm vụ chỉ bay 1 UAV và chỉ UAV đó được giữ chỗ). UAV phải `Available`, sức khỏe `Healthy` hoặc `Warning`, không `Unsuitable` với phạm vi, không trùng lịch.
-  - `confirmationDeadline` (tùy chọn, UTC): phải ở tương lai và không sau `plannedStart`. Bỏ trống → `now + Mission:ConfirmationDeadlineHours` (mặc định 24 giờ), tối đa bằng `plannedStart`. Quá hạn mà nhiệm vụ còn `PendingAcceptance` thì quản lý nhận `MISSION_CONFIRMATION_OVERDUE`.
+  - `confirmationDeadline` (tùy chọn, UTC): phải ở tương lai và không sau `plannedStart`. Bỏ trống → `now + Mission:ConfirmationDeadlineHours` (mặc định 24 giờ), tối đa bằng `plannedStart`. Quá hạn mà nhiệm vụ còn `Pending` thì quản lý nhận `MISSION_CONFIRMATION_OVERDUE`.
   - `managerInstructions` (tùy chọn, tối đa 2.000 ký tự): hiện trong thông báo `MISSION_DISPATCH`.
   - `idempotencyKey`: gửi lại cùng khóa với cùng quản lý, hồ sơ, tiêu đề và UAV trả về nhiệm vụ đã tạo (kể cả khi hai yêu cầu chạy đồng thời). Dùng lại khóa cho yêu cầu khác → `409 IDEMPOTENCY_KEY_REUSED`.
   - Xung đột lịch là booking `Active` (chưa xóa) chồng lên khoảng `[plannedStart, plannedEnd)`; hai khoảng chỉ chạm nhau thì không xung đột.
-- **Response `200 OK`**: đối tượng nhiệm vụ vừa tạo (`status = PendingAcceptance`, có `confirmationDeadline`, `managerInstructions`).
+- **Response `200 OK`**: đối tượng nhiệm vụ vừa tạo (`status = Pending`, có `confirmationDeadline`, `managerInstructions`).
 - **Lỗi**: `400 PERSONNEL_ASSIGNMENT_REQUIRED`, `DRONE_ASSIGNMENT_REQUIRED`, `DUPLICATE_PERSONNEL`, `DUPLICATE_DRONE`, `MULTIPLE_DRONES_NOT_SUPPORTED`, `REQUIRED_MEMBER_REQUIRED`, `RESOURCE_NOT_IN_ASSESSMENT`, `ASSIGNEE_INACTIVE`, `ASSIGNEE_ROLE_NOT_ELIGIBLE`, `ASSIGNEE_OUT_OF_SCOPE`, `DRONE_NOT_AVAILABLE`, `DRONE_CRITICAL_HEALTH`, `DRONE_HEALTH_UNKNOWN`, `DRONE_UNSUITABLE`, `INVALID_CONFIRMATION_DEADLINE`, `MANAGER_INSTRUCTIONS_TOO_LONG`, `EMERGENCY_REASON_REQUIRED`, `ASSESSMENT_*`; `409 RESOURCE_BOOKING_CONFLICT`, `IDEMPOTENCY_KEY_REUSED`, `ASSESSMENT_CONCURRENCY_CONFLICT`.
 
 ---
@@ -585,7 +584,7 @@ graph TD
 
 > Route gốc là `/api/v1/missions`. Nhiệm vụ được tạo qua `POST /api/v1/pre-mission-assessments/{id}/create-mission` (mục 4.4).
 > Endpoint trong module này bọc `ApiResponse`.
-> Trạng thái nhiệm vụ: `Draft`, `PendingAcceptance`, `Assigned`, `Preparing`, `Ready`, `InProgress`, `Suspended`, `Postponed`, `Completed`, `Cancelled`.
+> Trạng thái nhiệm vụ: `Draft`, `Pending`, `Ready`, `Postponed`, `InProgress`, `Completed`, `Cancelled`.
 
 #### 5.1. [GET] `/api/v1/missions`
 - **Phân quyền**: `SystemAdmin`, `Manager`, `Analyst`.
@@ -955,7 +954,7 @@ Hai endpoint cùng gọi `UploadInspectionImageCommand`: lưu tệp, tạo `insp
 - **Response `201 Created`** (`data`): phiếu bảo trì, gồm `id`, `ticketCode`, `anomalyId`, `towerId` (suy ra từ bất thường), `managerId`, `technicianId`, `status`, `priority`, `description`, `dueDate`, `assignedAt`, `startedAt`, `resolvedAt`, `createdAt`, `tower`, `anomaly`, `manager`, `technician`, `maintenanceProofs`.
 
 #### 8.5. [GET] `/api/v1/maintenance/tickets`
-- **Mô tả**: Lấy danh sách phiếu bảo trì có phân trang, lọc theo trạng thái (`Open`, `InProgress`, `PendingVerification`, `Resolved`, `Closed`) và mức ưu tiên.
+- **Mô tả**: Lấy danh sách phiếu bảo trì có phân trang, lọc theo trạng thái (`Open`, `Assigned`, `InProgress`, `PendingVerification`, `Closed`) và mức ưu tiên.
 - **Query Params**: `pageIndex` (mặc định `0`), `pageSize` (mặc định `10`), `status`, `priority`
 
 #### 8.5a. [GET] `/api/v1/maintenance/tickets/technicians`
@@ -964,13 +963,13 @@ Hai endpoint cùng gọi `UploadInspectionImageCommand`: lưu tệp, tạo `insp
 - **Response `200 OK`** (`data`): `[{ "id", "fullName", "email", "activeTicketCount" }]`
 
 #### 8.5b. [PUT] `/api/v1/maintenance/tickets/{id}/assign`
-- **Mô tả**: Giao hoặc đổi kỹ thuật viên cho phiếu đang `Open`. Phiếu tự sinh khi Analyst xác nhận bất thường chưa có kỹ thuật viên, nên phải giao trước khi chuyển sang `InProgress`. Ghi `assignedAt`, audit `TicketAssigned` và gửi thông báo `MAINTENANCE_ASSIGNED` cho kỹ thuật viên.
+- **Mô tả**: Giao hoặc đổi kỹ thuật viên cho phiếu đang `Open` hoặc `Assigned`, chuyển trạng thái sang `Assigned`. Phiếu tự sinh khi Analyst xác nhận bất thường chưa có kỹ thuật viên, nên phải giao trước khi chuyển sang `InProgress`. Ghi `assignedAt`, audit `TicketAssigned` và gửi thông báo `MAINTENANCE_ASSIGNED` cho kỹ thuật viên.
 - **Phân quyền**: `SystemAdmin`, `Manager`
 - **Request Body**: `{ "technicianId": "cccccccc-...", "dueDate": "2026-11-05T17:00:00Z" }` (`dueDate` tùy chọn, không ở quá khứ)
-- **Lỗi**: `400 TICKET_NOT_OPEN` khi phiếu không còn `Open`; `400` khi người được giao không phải kỹ thuật viên; `404` khi không tìm thấy phiếu hoặc người dùng.
+- **Lỗi**: `400 TICKET_NOT_OPEN` khi phiếu không còn `Open` hoặc `Assigned`; `400` khi người được giao không phải kỹ thuật viên; `404` khi không tìm thấy phiếu hoặc người dùng.
 
 #### 8.5c. [PUT] `/api/v1/maintenance/tickets/{id}/status` · [POST] `/api/v1/maintenance/tickets/{id}/materials` · [GET] `/api/v1/maintenance/tickets/my` · [GET] `/api/v1/maintenance/tickets/{id}`
-- `status`: body `{ "status": "InProgress" | "PendingVerification" }`. `InProgress` chỉ từ `Open` và cần đã giao kỹ thuật viên; `PendingVerification` chỉ từ `InProgress` và cần ít nhất một ảnh minh chứng.
+- `status`: body `{ "status": "Assigned" | "InProgress" | "PendingVerification" | "Closed" }`. `InProgress` từ `Open`/`Assigned` (cần đã giao kỹ thuật viên) hoặc từ `PendingVerification` (Manager từ chối nghiệm thu); `PendingVerification` chỉ từ `InProgress` và cần ít nhất một ảnh minh chứng.
 - `materials`: body `{ "componentName", "componentCode", "quantityUsed" (> 0), "unit", "fieldObservations" }`.
 - `my`: phiếu được giao cho kỹ thuật viên đang đăng nhập (`Technician`, `MaintenanceTechnician`).
 - `{id}`: chi tiết phiếu; `anomaly` gồm `categoryCode`, `categoryName`, `isEmergencyClass`, `imageUrl`, `cropUrl`, `boundingBox`, `mediaId`, `missionId`.
@@ -980,7 +979,7 @@ Hai endpoint cùng gọi `UploadInspectionImageCommand`: lưu tệp, tạo `insp
 - **Phân quyền**: `Technician`, `MaintenanceTechnician`, `SystemAdmin`, `Manager`
 
 #### 8.7. [PUT] `/api/v1/maintenance/tickets/{id}/close`
-- **Mô tả**: Nghiệm thu và đóng phiếu sửa chữa. Phiếu phải có ít nhất một ảnh minh chứng. Hệ thống chuyển phiếu sang `Closed`, ghi `resolvedAt` và chuyển bất thường của phiếu sang `validationStatus = "Resolved"`. Không có bộ đếm lỗi hay bảng lịch sử tình trạng cột cần cập nhật: số bất thường đang mở của một cột được tính trực tiếp từ `detected_anomalies` (xem `GET /api/v1/towers/{id}/history`).
+- **Mô tả**: Nghiệm thu và đóng phiếu sửa chữa. Phiếu phải ở trạng thái `PendingVerification` và có ít nhất một ảnh minh chứng. Hệ thống chuyển phiếu sang `Closed` và ghi `resolvedAt`. Không có bộ đếm lỗi hay bảng lịch sử tình trạng cột cần cập nhật: số bất thường đang mở của một cột được tính trực tiếp từ `detected_anomalies` (xem `GET /api/v1/towers/{id}/history`).
 - **Phân quyền**: `SystemAdmin`, `Manager`
 
 ---

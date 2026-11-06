@@ -1,0 +1,420 @@
+================================================================================
+TÀI LIỆU TỔNG HỢP LOGIC DỰ ÁN, DANH SÁCH SERVICE, VỊ TRÍ KHAI BÁO & GIAO THỨC
+DỰ ÁN: UAV-PMS (Powerline Management System using UAV & AI)
+================================================================================
+
+MỤC LỤC:
+  1. TỔNG QUAN KIẾN TRÚC & LOGIC NGHIỆP VỤ CỦA DỰ ÁN (4 MAINFLOWS)
+  2. DANH SÁCH TOÀN BỘ CÁC SERVICE TRONG HỆ THỐNG
+  3. CÁC GIAO THỨC GIAO TIẾP (PROTOCOLS) ĐƯỢC SỬ DỤNG
+  4. CHI TIẾT KHAI BÁO Ở ĐÂU & GỌI Ở ĐÂU (THEO TỪNG SERVICE & KẾT NỐI)
+  5. DANH SÁCH CÁC EXCHANGE, QUEUE & ROUTING KEY CỦA RABBITMQ
+  6. BẢNG ĐỊNH TUYẾN (ROUTING TABLE) TẠI API GATEWAY (OCELOT)
+
+================================================================================
+1. TỔNG QUAN KIẾN TRÚC & LOGIC NGHIỆP VỤ CỦA DỰ ÁN (4 MAINFLOWS)
+================================================================================
+
+1.1. Mô hình kiến trúc:
+- Hệ thống được xây dựng theo kiến trúc **Distributed Microservices** trên nền tảng **.NET 9**, kết hợp **Clean Architecture** (chia 4 tầng: `Domain`, `Application`, `Infrastructure`, `API`) và mẫu **CQRS + MediatR** (xử lý qua `Command`, `Query`, `ValidationBehavior`, `LoggingBehavior`).
+- Sử dụng mẫu **Transactional Outbox Pattern** (`OutboxMessage` + `OutboxDispatcher`) để đảm bảo tính toàn vẹn dữ liệu khi phát sự kiện tích hợp (Integration Events) sang **RabbitMQ**.
+- Cơ sở dữ liệu **PostgreSQL + PostGIS** được chia sẻ giữa các service, trong đó **`OperationsService` là Migration Owner duy nhất** chịu trách nhiệm chạy EF Core Migrations.
+
+1.2. Logic 4 luồng nghiệp vụ chính (4 Mainflows):
+
+* LUỒNG 1 (MF01) — Đánh giá trước bay & Lập kế hoạch nhiệm vụ (Pre-Mission Assessment & Mission Planning):
+  1. Manager/Inspector tạo hồ sơ đánh giá điều kiện bay trước nhiệm vụ (`PreMissionAssessment`) gồm thông tin thời tiết, không phận, rủi ro hiện trường.
+  2. Hệ thống phát sự kiện thời gian thực (`AssessmentRealtimeEvent`) qua RabbitMQ (hoặc HTTP fallback) sang `NotificationService` để cập nhật tức thì lên màn hình thông qua **SignalR**. Background job `PreMissionAssessmentExpiryJob` tự động hết hạn các bản đánh giá quá hạn.
+  3. Khi đánh giá đạt yêu cầu, Manager khởi tạo nhiệm vụ bay (`Mission`), chọn tuyến hành lang/cột điện (`Region` -> `Corridor` -> `Tower`), đặt lịch sử dụng thiết bị (`UAV/Drone`, `FlightController`, `Device`) có kiểm tra chống trùng lịch (`ResourceBooking`), và phân công nhân sự (`MissionAssignment`).
+  4. Khi điều phối nhiệm vụ (`Dispatch`), `OperationsService` lưu `OutboxMessage` -> `OutboxDispatcher` đẩy sự kiện `MissionDispatchedEvent` qua **RabbitMQ** -> `NotificationService` lưu thông báo và đẩy **SignalR** + **Email** cho Pilot/Inspector.
+
+* LUỒNG 2 (MF02) — Thực thi bay hiện trường & Tải dữ liệu kiểm tra (Field Execution & Inspection Media Upload):
+  1. Pilot thực hiện kiểm tra kỹ thuật Drone trước/sau bay (`DroneTechnicalInspection`).
+  2. Sau khi bay chụp lưới điện, Pilot/Inspector tải file ảnh hoặc video kiểm tra lên endpoint `POST /api/v1/inspections/upload` (đi qua Ocelot Gateway -> `OperationsService`).
+  3. `OperationsService` sử dụng `MinioFileStorageService` (giao thức **AWS S3 API**) để lưu file vào bucket `uav-media` trên **MinIO**, lưu metadata vào bảng `InspectionMedia`, đồng thời ghi sự kiện `InspectionMediaUploadedEvent` vào bảng `OutboxMessages`.
+
+* LUỒNG 3 (MF03) — Phân tích AI & Đánh giá mức độ nghiêm trọng (AI Inspection & Defect Evaluation):
+  1. `OutboxDispatcher` của `OperationsService` đẩy `InspectionMediaUploadedEvent` lên RabbitMQ (routing key `inspection.media.uploaded`).
+  2. `InspectionMediaUploadedConsumer` bên trong `AIInspectionService` nhận sự kiện, khởi tạo bản ghi lượt chạy `AIAnalysisRun` (trạng thái `Pending`), và phát yêu cầu phân tích `AIAnalysisRequestedEvent` lên RabbitMQ queue (`ai.analysis.server.image.requested` hoặc `ai.analysis.server.video.requested`).
+  3. Worker AI (`fastapi-ai` chạy YOLO hoặc `MockAIAnalysisConsumer`) tiêu thụ message yêu cầu, tải ảnh/video từ URL MinIO, thực hiện nhận diện lỗi và trả kết quả về qua RabbitMQ (`AIAnalysisResultConsumer` lắng nghe queue `ai.analysis.result`) hoặc qua HTTP Callback (`POST /api/v1/ai-analysis/callback`).
+  4. Khi nhận kết quả phát hiện lỗi (`ProcessAiAnalysisResultCommandHandler`), với mỗi lỗi (`Detection`), `AIInspectionService` gọi đồng bộ qua giao thức **gRPC (HTTP/2)** sang `InspectionEvaluationService` (`EvaluateDetection`) để tính toán mức độ nghiêm trọng (`Severity`), mức rủi ro (`RiskLevel`), điểm ưu tiên (`PriorityScore`) và cờ cảnh báo khẩn (`RequiresImmediateAlert`). Nếu gRPC không phản hồi sau 3 giây, hệ thống tự động chuyển sang cơ chế tính điểm dự phòng nội bộ (Local Fallback).
+  5. `AIInspectionService` lưu các bản ghi bất thường `DetectedAnomaly`, cập nhật trạng thái `InspectionMedia` thành `PendingReview`, và đẩy sự kiện `AiDetectionCompletedEvent` + `AIAnalysisStatusChangedEvent` vào Outbox -> RabbitMQ.
+  6. Analyst xem xét các `DetectedAnomaly`, xác nhận (`Confirm`) hoặc từ chối (`Reject`) kết quả nhận diện của AI.
+
+* LUỒNG 4 (MF04) — Cảnh báo khẩn cấp, Phiếu bảo trì & Thông báo thời gian thực (Alerts, Maintenance & Notifications):
+  1. Khi có lỗi nghiêm trọng (`Critical` / `IsEmergencyClass`), hệ thống tự động kích hoạt cảnh báo khẩn cấp (`EmergencyAlert`).
+  2. Từ các khiếm khuyết đã xác nhận, Manager/Engineer tạo phiếu bảo trì (`MaintenanceTicket`), phân công kỹ sư xử lý, theo dõi tiến độ khắc phục và đóng phiếu.
+  3. Sự kiện `MaintenanceTicketAssignedEvent`, `DefectDetectedEvent`, `MissionLifecycleRealtimeEvent` được `NotificationService` tiêu thụ từ RabbitMQ để:
+     - Đẩy thông báo thời gian thực qua **SignalR WebSocket** (`/hubs/notifications`) tới đúng group người dùng (`user:{id}`, `role:{role}`, `mission_{id}`, `assessment_{id}`).
+     - Chạy các tác vụ nền định kỳ qua **Hangfire** (`CleanupJob`, `DailySummaryJob`, `PushNotificationsJob`, `MissionConfirmationOverdueJob`).
+
+1.3. Vòng đời trạng thái chuẩn của 4 thực thể chính (theo State Machine Diagrams):
+  - `PreMissionAssessment` (`PreMissionAssessmentStatus`):
+    `Evaluating` (khởi tạo) -> `Ready` / `NotReady` -> `Completed` (khi tạo Mission), `Expired` (quá hạn), `Cancelled` (hủy).
+  - `Mission` (`MissionStatus`):
+    `Draft` (khởi tạo) -> `Pending` -> `Ready` / `Postponed` -> `InProgress` -> `Completed` / `Cancelled`.
+  - `DetectedAnomaly` (`AnomalyStatus` / `ValidationStatus`):
+    `Pending` (AI/Manual tạo) -> `InReview` (Analyst đang thẩm định) -> `Confirmed` / `Rejected`.
+  - `MaintenanceTicket` (`TicketStatus`):
+    `Open` (khởi tạo) -> `Assigned` (giao kỹ thuật viên) -> `InProgress` (đang sửa chữa) -> `PendingVerification` (gửi ảnh nghiệm thu; nếu từ chối quay lại `InProgress`) -> `Closed` (đóng phiếu).
+
+================================================================================
+2. DANH SÁCH TOÀN BỘ CÁC SERVICE TRONG HỆ THỐNG
+================================================================================
+
+A. NHÓM APPLICATION MICROSERVICES (7 SERVICES):
+  1. API Gateway (`UavPms.ApiGateway` - .NET 9 + Ocelot)
+     - Container: `uav-gateway` | Port nội bộ: `8080` | Port host: `5194`
+     - Vai trò: Cổng vào duy nhất cho Client, định tuyến request HTTP & WebSocket tới các microservice phía sau, gộp tài liệu Swagger OpenAPI của toàn hệ thống.
+
+  2. Identity Service (`UavPms.IdentityService.API` - .NET 9)
+     - Container: `uav-identity-service` | Port nội bộ: `8080` (Local dev: `5101`)
+     - Vai trò: Đăng nhập, xác thực 2 lớp (OTP), cấp phát/làm mới JWT Token, quên mật khẩu, xác thực nâng cao (Step-up OTP), quản lý người dùng và phân quyền vai trò.
+
+  3. Operations Service (`UavPms.OperationsService.API` - .NET 9)
+     - Container: `uav-operations-service` | Port nội bộ: `8080` (Local dev: `5102`)
+     - Vai trò: Quản lý lưới điện GIS (`Region`, `Corridor`, `Tower`), thiết bị bay (`UAV`, `FlightController`, `Device`), đánh giá trước bay (`PreMissionAssessment`), nhiệm vụ bay (`Mission`), kiểm tra kỹ thuật Drone (`DroneTechnicalInspection`), upload ảnh/video (`InspectionMedia`), cảnh báo khẩn cấp (`EmergencyAlert`), phiếu bảo trì (`MaintenanceTicket`), xuất báo cáo (`Report`), nhật ký hệ thống (`AuditLog`), và quản lý EF Core Database Migrations.
+
+  4. AI Inspection Service (`UavPms.AIInspectionService.API` - .NET 9)
+     - Container: `uav-ai-inspection-service` | Port nội bộ: `8080` (Local dev: `5103`)
+     - Vai trò: Quản lý danh mục lỗi (`DefectCategory`), điều phối tiến trình phân tích AI (`AIAnalysisRun`), xử lý kết quả AI trả về, đối chiếu thay thế kết quả Edge bằng Cloud (`DetectionMatcher`), gọi gRPC chấm điểm lỗi, quản lý và phê duyệt bất thường (`DetectedAnomaly`), xuất metrics Prometheus (`/metrics`).
+
+  5. Inspection Evaluation Service (`UavPms.InspectionEvaluationService.API` - .NET 9 gRPC)
+     - Container: `uav-inspection-evaluation-service` | Port gRPC (HTTP/2): `8080` | Port Health (HTTP/1.1): `8081`
+     - Vai trò: Microservice chuyên biệt chạy giao thức **gRPC** (`uavpms.inspectionevaluation.InspectionEvaluation`) để đánh giá mức độ nghiêm trọng và tính điểm ưu tiên cho từng lỗi được AI phát hiện.
+
+  6. Notification Service (`UavPms.NotificationService.API` - .NET 9 + SignalR + Hangfire)
+     - Container: `uav-notification-service` | Port nội bộ: `8080` (Local dev: `5104`)
+     - Vai trò: Quản lý thông báo người dùng (`Notification`), duy trì kết nối thời gian thực qua **SignalR Hub** (`/hubs/notifications`), thực thi 8 RabbitMQ Consumers nhận sự kiện từ các service khác, và vận hành **Hangfire Server & Dashboard** (`/hangfire`) cho các tác vụ lập lịch định kỳ.
+
+  7. FastAPI YOLO AI Service (`fastapi-ai` - Python FastAPI + YOLO)
+     - Container: `uav-fastapi-ai` | Port nội bộ: `8000`
+     - Vai trò: Dịch vụ AI chuyên xử lý thị giác máy tính (Computer Vision) nhận diện khiếm khuyết cột điện/đường dây từ ảnh và video của Drone.
+
+B. NHÓM INFRASTRUCTURE SERVICES (4 DỊCH VỤ HẠ TẦNG NỘI BỘ):
+  8. PostgreSQL + PostGIS (`uavpms-db`, Port `5432`)
+     - Lưu trữ dữ liệu quan hệ, dữ liệu tọa độ không gian GIS (`geometry(Point, 4326)`), bảng `OutboxMessages` và các bảng lịch trình của `Hangfire`.
+  9. Redis (`uav-redis`, Port `6379`)
+     - Lưu trữ In-Memory Key-Value có TTL cho mã OTP đã băm, bộ đếm số lần thử OTP, thời gian chờ gửi lại (cooldown), Verification Token và Step-Up Token.
+  10. RabbitMQ (`uav-rabbitmq`, Port `5672` AMQP / `15672` Web Management)
+     - Message Broker điều phối toàn bộ giao tiếp sự kiện bất đồng bộ giữa các microservice.
+  11. MinIO Object Storage (`uavpms-minio`, Port `9000` S3 API / `9001` Console)
+     - Lưu trữ tệp đa phương tiện (ảnh chụp, video hành trình bay, ảnh crop vùng lỗi) theo chuẩn AWS S3.
+
+C. NHÓM EXTERNAL SERVICES & GATEWAY NGOÀI CÙNG:
+  12. DuckDNS & Nginx Proxy Manager: Quản lý tên miền động (`uavpms.ddns.net`), chứng chỉ SSL Let's Encrypt và Reverse Proxy từ Internet vào `uav-gateway:5194`.
+  13. Brevo Transactional Email API (`https://api.brevo.com/v3/smtp/email`): Gửi email mã OTP và khôi phục mật khẩu từ `IdentityService`.
+  14. SendGrid Email API (`https://api.sendgrid.com`): Gửi email thông báo hệ thống từ `NotificationService`.
+
+================================================================================
+3. CÁC GIAO THỨC GIAO TIẾP (PROTOCOLS) ĐƯỢC SỬ DỤNG
+================================================================================
+
+1. HTTPS / HTTP/1.1 (RESTful API - JSON / XML / Multipart Form-Data):
+   - Giao tiếp từ Client (Angular Web, Drone/Field App) -> Nginx -> Ocelot API Gateway -> các Microservice.
+   - Giao tiếp từ `IdentityService` -> Brevo REST API (`POST https://api.brevo.com/v3/smtp/email`).
+   - Giao tiếp từ `NotificationService` -> SendGrid REST API (qua `SendGridClient`).
+   - Giao tiếp HTTP Fallback trực tiếp từ `OperationsService` -> `NotificationService` (`POST /api/v1/notifications/realtime/mission-event` và `/assessment-event`) khi RabbitMQ gặp sự cố.
+
+2. HTTP/2 — gRPC (Protocol Buffers - `application/grpc`):
+   - Giao tiếp RPC tốc độ cao giữa `AIInspectionService` (Client) và `InspectionEvaluationService` (Server) tại địa chỉ `http://inspectionevaluationservice:8080`.
+   - File hợp đồng Proto: `Shared/UavPms.Shared.Contracts/Protos/inspection_evaluation.proto` (hoặc namespace `UavPms.Grpc.InspectionEvaluation`).
+
+3. WebSocket / WSS — SignalR Realtime Protocol:
+   - Giao tiếp hai chiều thời gian thực giữa Client -> API Gateway (`ws://notificationservice:8080/hubs/notifications`) -> `NotificationHub` trong `NotificationService`.
+   - Xác thực qua JWT Access Token truyền trong query string `?access_token=...` hoặc header `Authorization: Bearer ...`.
+
+4. AMQP 0-9-1 (Advanced Message Queuing Protocol - TCP Port 5672):
+   - Giao tiếp sự kiện bất đồng bộ qua **RabbitMQ** (sử dụng thư viện `RabbitMQ.Client` v7 với `AsyncEventingBasicConsumer`, Topic Exchange, Fanout Dead-Letter Exchange và TTL Retry Queue).
+
+5. AWS S3 REST API over HTTP/HTTPS (Path-Style Addressing - Port 9000):
+   - Giao tiếp giữa `OperationsService` / `AIInspectionService` và **MinIO** thông qua thư viện `AWSSDK.S3` (`IAmazonS3`).
+
+6. RESP (Redis Serialization Protocol - TCP Port 6379):
+   - Giao tiếp giữa `IdentityService` và **Redis** qua thư viện `StackExchange.Redis` (`IConnectionMultiplexer`).
+
+7. PostgreSQL Frontend/Backend Protocol v3 (TCP Port 5432):
+   - Giao tiếp giữa các Microservice (`EntityFrameworkCore.PostgreSQL` + `NetTopologySuite`) và `Hangfire.PostgreSql` với **PostgreSQL/PostGIS**.
+
+================================================================================
+4. CHI TIẾT KHAI BÁO Ở ĐÂU & GỌI Ở ĐÂU (THEO TỪNG SERVICE & KẾT NỐI)
+================================================================================
+
+--------------------------------------------------------------------------------
+4.1. CẤU HÌNH HẠ TẦNG & CONTAINER TỔNG THỂ (DOCKER COMPOSE)
+--------------------------------------------------------------------------------
+* Khai báo tại:
+  - `docker-compose.yml` (dòng 1 - 289):
+    + Khai báo biến môi trường dùng chung `x-service-environment` (DB, Redis, JWT, Brevo, SendGrid, MinIO, RabbitMQ, gRPC URL, AI Messaging).
+    + Khai báo 9 container services: `redis`, `rabbitmq`, `gateway`, `inspectionevaluationservice`, `identityservice`, `operationsservice`, `aiinspectionservice`, `fastapi-ai`, `notificationservice` và mạng `uavpms-infra`.
+
+--------------------------------------------------------------------------------
+4.2. API GATEWAY (OCELOT) -> CÁC MICROSERVICE PHÍA SAU
+--------------------------------------------------------------------------------
+* Khai báo tại:
+  - `UavPms.ApiGateway/Program.cs`:
+    + Dòng 27-39: Nạp cấu hình định tuyến `ocelot.json` (và `ocelot.Development.json` khi chạy local).
+    + Dòng 74-75: `builder.Services.AddHttpClient(); builder.Services.AddOcelot(builder.Configuration);`
+    + Dòng 80: `app.UseWebSockets();` (hỗ trợ proxy kết nối WebSocket SignalR).
+    + Dòng 97-111: Khai báo danh sách URL Swagger của 4 service (`identity`, `operations`, `ai-inspection`, `notifications`).
+  - `UavPms.ApiGateway/ocelot.json` (dòng 1 - 467):
+    + Khai báo toàn bộ bảng định tuyến Upstream -> Downstream (chi tiết tại Mục 6 bên dưới).
+* Gọi ở đâu:
+  - `UavPms.ApiGateway/Program.cs`:
+    + Dòng 133-157 & 224-230: Dùng `HttpClient` gọi lấy file `swagger.json` từ 4 service để gộp thành `/swagger/v1/swagger.json`.
+    + Dòng 258: `await app.UseOcelot();` — Ocelot tự động chuyển tiếp (proxy) mọi request HTTP và WebSocket tới các microservice tương ứng.
+
+--------------------------------------------------------------------------------
+4.3. KẾT NỐI CƠ SỞ DỮ LIỆU POSTGRESQL + POSTGIS (EF CORE & HANGFIRE)
+--------------------------------------------------------------------------------
+* Khai báo tại:
+  - `Services/IdentityService/UavPms.IdentityService.Infrastructure/DependencyInjection.cs` (dòng 25-38):
+    `services.AddDbContext<ApplicationDbContext>(options => options.UseNpgsql(..., o => o.UseNetTopologySuite()))`
+  - `Services/OperationsService/UavPms.OperationsService.Infrastructure/DependencyInjection.cs` (dòng 35-48):
+    `services.AddDbContext<ApplicationDbContext>(options => options.UseNpgsql(..., o => o.UseNetTopologySuite()))`
+  - `Services/AIInspectionService/UavPms.AIInspectionService.Infrastructure/DependencyInjection.cs` (dòng 43-56):
+    `services.AddDbContext<ApplicationDbContext>(options => options.UseNpgsql(..., o => o.UseNetTopologySuite()))`
+  - `Services/NotificationService/UavPms.NotificationService.Infrastructure/DependencyInjection.cs` (dòng 24-37):
+    `services.AddDbContext<ApplicationDbContext>(options => options.UseNpgsql(..., o => o.UseNetTopologySuite()))`
+  - `Services/NotificationService/UavPms.NotificationService.API/Program.cs` (dòng 144-159):
+    `builder.Services.AddHangfire(config => config.UsePostgreSqlStorage(...))`
+* Gọi ở đâu:
+  - Chạy Migration tự động khi bật cờ `RunMigrations=true`:
+    `Services/OperationsService/UavPms.OperationsService.API/Program.cs` (dòng 107-117): `dbContext.Database.Migrate();`
+  - Gọi truy vấn/lưu dữ liệu thông qua `UnitOfWork` và các `Repository` trong tầng `Infrastructure/Repositories/*` của từng service, được tiêm (inject) vào các MediatR Command/Query Handlers trong tầng `Application/Features/*`.
+
+--------------------------------------------------------------------------------
+4.4. KẾT NỐI REDIS (OTP, COOLDOWN, VERIFICATION & STEP-UP TOKEN)
+--------------------------------------------------------------------------------
+* Khai báo tại:
+  - `Services/IdentityService/UavPms.IdentityService.Infrastructure/DependencyInjection.cs`:
+    + Dòng 79-89: Đăng ký Singleton `StackExchange.Redis.IConnectionMultiplexer` từ cấu hình `Redis:ConnectionString` và `Redis:Password`.
+    + Dòng 91: `services.AddScoped<IOtpService, RedisOtpService>();`
+* Gọi ở đâu:
+  - `Services/IdentityService/UavPms.IdentityService.Infrastructure/Services/RedisOtpService.cs`:
+    + Dòng 34: `private IDatabase GetDb() => _redis.GetDatabase();`
+    + Dòng 45, 73, 75: `db.KeyTimeToLiveAsync(otpKey)`, `db.StringSetAsync(otpKey, hashedCode, ttl)`, `db.KeyDeleteAsync(attemptsKey)` khi tạo mã OTP.
+    + Dòng 112, 123, 129, 135: `db.StringGetAsync(otpKey)`, `db.KeyDeleteAsync(...)`, `db.StringIncrementAsync(attemptsKey)`, `db.KeyExpireAsync(...)` khi xác thực mã OTP.
+    + Dòng 151-193: Lưu/đọc/xóa `VerificationToken` và `StepUpToken` trên Redis.
+  - Được gọi từ các MediatR Handlers và OTP Strategies trong `IdentityService.Application/Features/Auth/*` (như `LoginCommandHandler`, `SendOtpCommandHandler`, `VerifyOtpCommandHandler`, `LoginOtpStrategy`, `ForgotPasswordOtpStrategy`, `StepUpOtpStrategy`).
+
+--------------------------------------------------------------------------------
+4.5. KẾT NỐI DỊCH VỤ EMAIL BÊN NGOÀI (BREVO & SENDGRID)
+--------------------------------------------------------------------------------
+A. Brevo Mail Provider (trong `IdentityService`):
+* Khai báo tại:
+  - `Services/IdentityService/UavPms.IdentityService.Infrastructure/DependencyInjection.cs` (dòng 72-76):
+    ```csharp
+    services.AddHttpClient<IEmailService, EmailService>(client =>
+    {
+        client.BaseAddress = new Uri("https://api.brevo.com/");
+        client.Timeout = TimeSpan.FromSeconds(15);
+    });
+    ```
+* Gọi ở đâu:
+  - `Services/IdentityService/UavPms.IdentityService.Infrastructure/Services/EmailService.cs`:
+    + Dòng 25-33 (`SendOtpEmailAsync`), dòng 35-43 (`SendPasswordResetEmailAsync`), dòng 45-48 (`SendEmailAsync`).
+    + Dòng 67-74: Gửi HTTP `POST https://api.brevo.com/v3/smtp/email` với header `api-key: <Brevo:ApiKey>`.
+  - Được gọi trực tiếp tại `RedisOtpService.cs` (dòng 65: `await _emailService.SendOtpEmailAsync(email, code, expiryTime);`).
+
+B. SendGrid Mail Provider (trong `NotificationService`):
+* Khai báo tại:
+  - `Services/NotificationService/UavPms.NotificationService.Infrastructure/DependencyInjection.cs`:
+    + Dòng 40-43: Bind cấu hình `SendGridOptions` (`SendGrid:ApiKey`, `FromEmail`, `FromName`).
+    + Dòng 78: `services.AddScoped<IEmailService, EmailService>();`
+* Gọi ở đâu:
+  - `Services/NotificationService/UavPms.NotificationService.Infrastructure/Services/EmailService.cs`:
+    + Dòng 19-26: Khởi tạo `new SendGridClient(_options.ApiKey)`.
+    + Dòng 28-68: Gửi email qua `SendGridClient.SendEmailAsync(msg)` khi được gọi từ các Notification Consumers / Handlers.
+
+--------------------------------------------------------------------------------
+4.6. KẾT NỐI MINIO OBJECT STORAGE (CHUẨN AWS S3 API)
+--------------------------------------------------------------------------------
+* Khai báo tại:
+  - `Services/OperationsService/UavPms.OperationsService.Infrastructure/DependencyInjection.cs` (dòng 59-60 & 135-147):
+    + Nếu `Minio:Endpoint`, `AccessKey`, `SecretKey` đã cấu hình -> Đăng ký Singleton `IAmazonS3` (`MinioFileStorageService.CreateClient(minio)`) và Scoped `IFileStorageService -> MinioFileStorageService`.
+    + Nếu chưa cấu hình -> Fallback về `LocalFileStorageService`.
+  - `Services/AIInspectionService/UavPms.AIInspectionService.Infrastructure/DependencyInjection.cs` (dòng 97-110):
+    + Đăng ký tương tự `IAmazonS3` và `IFileStorageService -> MinioFileStorageService`.
+* Gọi ở đâu:
+  - `Services/OperationsService/UavPms.OperationsService.Infrastructure/Services/MinioFileStorageService.cs` (và file tương ứng bên `AIInspectionService`):
+    + Dòng 34-43: Tạo `AmazonS3Client` với `ForcePathStyle = true`.
+    + Dòng 45-71 (`SaveImageAsync`): Kiểm tra định dạng file, tự động tạo bucket + gán quyền public-read (`EnsureBucketAsync` dòng 96-121), và gọi `_s3.PutObjectAsync(...)` để upload file lên MinIO theo đường dẫn `{bucket}/{yyyy}/{MM}/{guid}_{fileName}`.
+    + Dòng 73-90 (`DeleteImageAsync`): Gọi `_s3.DeleteObjectAsync(_options.Bucket, objectName)` để xóa file.
+  - Được gọi khi Pilot/Inspector tải ảnh/video kiểm tra tại `OperationsService` (`UploadInspectionMediaCommandHandler` / `InspectionsController`) hoặc khi lưu ảnh sự cố/bất thường.
+
+--------------------------------------------------------------------------------
+4.7. KẾT NỐI gRPC GIỮA `AIInspectionService` VÀ `InspectionEvaluationService`
+--------------------------------------------------------------------------------
+* Khai báo gRPC Server tại (`InspectionEvaluationService`):
+  - `Services/InspectionEvaluationService/UavPms.InspectionEvaluationService.API/Program.cs`:
+    + Dòng 12-26: Cấu hình Kestrel lắng nghe cổng `8080` với giao thức `HttpProtocols.Http2` (dành cho gRPC) và cổng `8081` với `HttpProtocols.Http1` (dành cho `/health`).
+    + Dòng 33 & 38: `builder.Services.AddGrpc();` và `app.MapGrpcService<InspectionEvaluationGrpcService>();`
+  - Cài đặt logic Server tại:
+    `Services/InspectionEvaluationService/UavPms.InspectionEvaluationService.Infrastructure/Services/InspectionEvaluationGrpcService.cs` (dòng 24-51: phương thức `EvaluateDetection` gọi `DetectionEvaluationEngine.Evaluate(...)`).
+
+* Khai báo gRPC Client tại (`AIInspectionService`):
+  - `Services/AIInspectionService/UavPms.AIInspectionService.Infrastructure/DependencyInjection.cs` (dòng 70-75):
+    ```csharp
+    var inspectionEvaluationUrl = configuration["GrpcServices:InspectionEvaluationUrl"]
+        ?? "http://inspectionevaluationservice:8080";
+    services.AddSingleton(_ => GrpcChannel.ForAddress(inspectionEvaluationUrl));
+    services.AddSingleton(sp =>
+        new InspectionEvaluation.InspectionEvaluationClient(sp.GetRequiredService<GrpcChannel>()));
+    services.AddScoped<IInspectionEvaluationClient, GrpcInspectionEvaluationClient>();
+    ```
+* Gọi gRPC ở đâu:
+  - `Services/AIInspectionService/UavPms.AIInspectionService.Infrastructure/Grpc/GrpcInspectionEvaluationClient.cs`:
+    + Dòng 16-43 (`EvaluateAsync`): Gọi `await client.EvaluateDetectionAsync(new EvaluateDetectionRequest { ... })` với timeout deadline 3 giây.
+    + Dòng 45-82 (`CreateFallbackResultAsync`): Nếu gRPC Server không khả dụng hoặc quá hạn 3 giây, tự động tính toán mức độ nghiêm trọng bằng tập luật dự phòng nội bộ (Fallback).
+  - Được gọi trong luồng xử lý kết quả AI tại:
+    `Services/AIInspectionService/UavPms.AIInspectionService.Application/Features/AIAnalysis/Commands/ProcessCallbackResults/ProcessAiAnalysisResultCommandHandler.cs` (dòng 204-213).
+
+--------------------------------------------------------------------------------
+4.8. KẾT NỐI SIGNALR WEBSOCKET & HTTP FALLBACK (`OperationsService` -> `NotificationService` -> Client)
+--------------------------------------------------------------------------------
+* Khai báo SignalR Hub tại (`NotificationService`):
+  - `Services/NotificationService/UavPms.NotificationService.API/Program.cs`:
+    + Dòng 48-50: `builder.Services.AddSignalR();`, đăng ký `INotificationConnectionRegistry` và `IRealtimeNotificationService`.
+    + Dòng 88-102: Cấu hình `JwtBearerEvents.OnMessageReceived` đọc `access_token` từ query string cho đường dẫn `/hubs/notifications`.
+    + Dòng 232: `app.MapHub<NotificationHub>("/hubs/notifications").RequireAuthorization();`
+* Logic Hub & Gọi đẩy thông báo xuống Client ở đâu:
+  - `Services/NotificationService/UavPms.NotificationService.API/Hubs/NotificationHub.cs`:
+    + Khi Client kết nối (`OnConnectedAsync` dòng 34-62): Tự động đưa kết nối vào group `user:{userId}` và `role:{roleName}`.
+    + Hỗ trợ Client tham gia/rời các group theo ngữ cảnh: `JoinMissionGroup` (`mission_{missionId}`), `JoinAssessmentGroup` (`assessment_{assessmentId}`), `JoinAssessmentsListGroup` (`assessments`).
+    + Phát sự kiện xuống Client qua `Clients.Group(...).SendAsync(...)` tại `SendMissionEvent` (dòng 157-166) và `SendAssessmentEvent` (dòng 218-235).
+  - `Services/NotificationService/UavPms.NotificationService.API/Services/RealtimeNotificationService.cs`:
+    + Sử dụng `IHubContext<NotificationHub>` để đẩy thông báo mới tới group `user:{userId}` hoặc `role:{roleName}` khi các RabbitMQ Consumers hoặc Hangfire Jobs xử lý xong.
+* Gọi từ `OperationsService` sang `NotificationService` ở đâu:
+  - `Services/OperationsService/UavPms.OperationsService.Infrastructure/Services/MissionRealtimeNotifier.cs`:
+    + Khai báo tại `OperationsService.Infrastructure/DependencyInjection.cs` (dòng 104-105): `services.AddScoped<IMissionRealtimeNotifier, MissionRealtimeNotifier>(); services.AddHttpClient();`
+    + Dòng 34-89 (`NotifyAsync`) & dòng 91-145 (`NotifyAssessmentAsync`):
+      1. Ưu tiên phát sự kiện `MissionLifecycleRealtimeEvent` / `AssessmentRealtimeIntegrationEvent` qua **RabbitMQ** (`_eventPublisher.PublishAsync(...)`).
+      2. Nếu RabbitMQ lỗi, tự động dùng `HttpClient` gọi trực tiếp HTTP POST sang `http://notificationservice:8080/api/v1/notifications/realtime/mission-event` hoặc `/assessment-event`.
+
+--------------------------------------------------------------------------------
+4.9. KẾT NỐI HANGFIRE BACKGROUND JOBS (TRONG `NotificationService`)
+--------------------------------------------------------------------------------
+* Khai báo tại:
+  - `Services/NotificationService/UavPms.NotificationService.API/Program.cs`:
+    + Dòng 126-130: Đăng ký DI cho 5 Job classes (`CleanupJob`, `DailySummaryJob`, `PushNotificationsJob`, `ScheduledNotificationJob`, `MissionConfirmationOverdueJob`).
+    + Dòng 142-160: Đăng ký `AddHangfire` (lưu trữ trên PostgreSQL) và `AddHangfireServer`.
+    + Dòng 188-195: Mở trang quản trị `app.UseHangfireDashboard("/hangfire")` (được proxy qua Ocelot Gateway tại `/hangfire`).
+    + Dòng 210-218: Đăng ký 4 Recurring Jobs chạy tự động:
+      1. `auto-cleanup-job` (`CleanupJob`, chạy hàng tuần `Cron.Weekly`)
+      2. `daily-summary-job` (`DailySummaryJob`, chạy hàng ngày `Cron.Daily`)
+      3. `push-notifications-sync` (`PushNotificationsJob`, chạy mỗi phút `Cron.Minutely`)
+      4. `mission-confirmation-overdue-job` (`MissionConfirmationOverdueJob`, chạy mỗi phút `Cron.Minutely`)
+  - Ngoài ra trong `OperationsService` có 1 Native HostedService chạy ngầm:
+    + `PreMissionAssessmentExpiryJob` khai báo tại `OperationsService.Infrastructure/DependencyInjection.cs` (dòng 128).
+
+================================================================================
+5. DANH SÁCH CÁC EXCHANGE, QUEUE & ROUTING KEY CỦA RABBITMQ
+================================================================================
+
+Tất cả các kết nối RabbitMQ đều sử dụng class `RabbitMqConnection` (Singleton) và `RabbitMqEventPublisher` (`IEventPublisher`) được khai báo trong `Infrastructure/DependencyInjection.cs` của cả 4 service (`IdentityService`, `OperationsService`, `AIInspectionService`, `NotificationService`).
+
+5.1. Các Exchange chính:
+  1. `uavpms.events` (Topic Exchange - chuẩn hóa mới, khai báo trong `Shared/UavPms.Shared.Contracts/Events/EventTopologyConstants.cs`)
+  2. `identity-exchange` (Topic Exchange - dùng cho các sự kiện AI request/result và tương thích ngược)
+  3. `ai.analysis.dlx` & `ai.analysis.result.dlx` (Fanout Dead-Letter Exchanges - xử lý message lỗi)
+
+5.2. Bảng chi tiết Luồng Sự kiện (Publisher -> Exchange / Routing Key -> Queue -> Consumer):
+
+  [1] Sự kiện Upload Media kiểm tra (`InspectionMediaUploadedEvent`):
+      - Nơi phát (Publisher): `OperationsService` (ghi vào bảng `OutboxMessages` khi upload ảnh/video -> `OutboxDispatcher.cs` dòng 76-78 phát lên RabbitMQ).
+      - Routing Key: `inspection.media.uploaded` (và legacy `identity.event.inspectionmediauploadedevent`).
+      - Queue nhận: `ai-inspection.media-process`.
+      - Nơi tiêu thụ (Consumer): `InspectionMediaUploadedConsumer` trong `AIInspectionService` (khai báo tại `AIInspectionService.API/Program.cs` dòng 99).
+      - Hành động: Gọi `StartUploadedMediaAnalysisCommand` tạo `AIAnalysisRun` và phát tiếp yêu cầu phân tích AI.
+
+  [2] Sự kiện Yêu cầu Phân tích AI (`AIAnalysisRequestedEvent`):
+      - Nơi phát (Publisher): `AIInspectionService` (`StartUploadedMediaAnalysisCommandHandler` / `RequestAIAnalysisCommandHandler`).
+      - Exchange: `identity-exchange` (khai báo topology bởi `AIAnalysisRequestTopologyInitializer.cs`).
+      - Routing Keys & Queues tương ứng:
+        + Ảnh trên Cloud/Server: `identity.event.aianalysisrequestedevent.server.image` -> Queue: `ai.analysis.server.image.requested`
+        + Video trên Cloud/Server: `identity.event.aianalysisrequestedevent.server.video` -> Queue: `ai.analysis.server.video.requested`
+        + Ảnh trên Edge (YOLO11): `identity.event.aianalysisrequestedevent.edge.image` -> Queue: `ai.analysis.edge.image.requested`
+        + Video trên Edge (YOLO11): `identity.event.aianalysisrequestedevent.edge.video` -> Queue: `ai.analysis.edge.video.requested`
+      - Nơi tiêu thụ (Consumer): Worker AI thực (`fastapi-ai`) hoặc `MockAIAnalysisConsumer` (khai báo tại `AIInspectionService.API/Program.cs` dòng 92 khi `MockAI:Enabled=true`).
+
+  [3] Sự kiện Trả Kết quả Phân tích AI (`AIAnalysisResultEvent`):
+      - Nơi phát (Publisher): Worker AI sau khi chạy mô hình nhận diện xong.
+      - Exchange: `identity-exchange` | Routing Key: `identity.event.aianalysisresultevent`.
+      - Queue nhận: `ai.analysis.result` (kèm cơ chế Retry Queue `ai.analysis.result.retry` TTL 15s tối đa 3 lần và Dead-Letter Queue `ai.analysis.result.dead-letter`).
+      - Nơi tiêu thụ (Consumer): `AIAnalysisResultConsumer` trong `AIInspectionService` (khai báo tại `AIInspectionService.API/Program.cs` dòng 98).
+      - Hành động: Gọi `ProcessAiAnalysisResultCommand` -> gọi gRPC chấm điểm -> lưu `DetectedAnomaly` -> phát sự kiện hoàn tất.
+
+  [4] Sự kiện Phát hiện Khiếm khuyết Hoàn tất (`AiDetectionCompletedEvent` / `DefectDetectedEvent`):
+      - Nơi phát (Publisher): `AIInspectionService` (`ProcessAiAnalysisResultCommandHandler.cs` dòng 219-237 ghi vào Outbox -> `OutboxDispatcher` phát lên RabbitMQ).
+      - Routing Key: `ai.detection.completed` (và legacy `identity.event.defectdetectedevent`).
+      - Nơi tiêu thụ (Consumers):
+        + Tại `OperationsService`: `AiDetectionCompletedConsumer` (lắng nghe queue `operations.defect-record`, khai báo tại `OperationsService.Infrastructure/DependencyInjection.cs` dòng 77) -> Đồng bộ bản ghi `DetectedAnomaly` và tạo `EmergencyAlert` nếu là lỗi khẩn cấp.
+        + Tại `NotificationService`: `DefectDetectedConsumer` (khai báo tại `NotificationService.API/Program.cs` dòng 117) -> Tạo thông báo cảnh báo lỗi cho người dùng liên quan.
+
+  [5] Sự kiện Thay đổi Trạng thái Phân tích AI (`AIAnalysisStatusChangedEvent`):
+      - Nơi phát (Publisher): `AIInspectionService` (`ProcessAiAnalysisResultCommandHandler.cs` dòng 274-289).
+      - Nơi tiêu thụ (Consumer): `AIAnalysisStatusChangedConsumer` trong `NotificationService` (khai báo tại `NotificationService.API/Program.cs` dòng 120) -> Đẩy thông báo hoàn tất/thất bại phân tích AI qua SignalR cho người yêu cầu.
+
+  [6] Các Sự kiện Nghiệp vụ & Thời gian thực từ `OperationsService` sang `NotificationService`:
+      - Nơi phát (Publisher): `OperationsService` (qua `OutboxDispatcher.cs` hoặc `MissionRealtimeNotifier.cs`).
+      - Nơi tiêu thụ (Consumers khai báo tại `NotificationService.API/Program.cs` dòng 115-123):
+        + `MissionCreatedConsumer`: Nhận sự kiện tạo nhiệm vụ mới (`MissionCreatedEvent` / `MissionCreatedFromAssessmentEvent`).
+        + `MissionDispatchedConsumer`: Nhận sự kiện điều phối nhiệm vụ (`MissionDispatchedEvent` - queue `notifications.mission-dispatch`).
+        + `MaintenanceTicketAssignedConsumer`: Nhận sự kiện giao phiếu bảo trì (`MaintenanceTicketAssignedEvent` - queue `notifications.ticket-assign`).
+        + `MissionLifecycleRealtimeConsumer`: Nhận sự kiện thay đổi trạng thái nhiệm vụ (`MissionLifecycleRealtimeEvent`) và phát qua SignalR Hub.
+        + `AssessmentRealtimeConsumer`: Nhận sự kiện thay đổi đánh giá trước bay (`AssessmentRealtimeIntegrationEvent`) và phát qua SignalR Hub.
+        + `NotificationPushConsumer`: Nhận yêu cầu đẩy thông báo tức thì.
+
+================================================================================
+6. BẢNG ĐỊNH TUYẾN (ROUTING TABLE) TẠI API GATEWAY (`UavPms.ApiGateway/ocelot.json`)
+================================================================================
+
+Mọi request từ Frontend/Mobile/Drone gửi tới `https://uavpms.ddns.net` (hoặc `http://localhost:5194`) đều được `UavPms.ApiGateway` định tuyến như sau:
+
+1. Chuyển tới `identityservice:8080` (HTTP):
+   - `/health/identity` -> `/health`
+   - `/api/v{version}/auth` & `/api/v{version}/auth/{everything}`
+   - `/api/v{version}/users` & `/api/v{version}/users/{everything}` (trừ endpoint `geographic-scopes`)
+
+2. Chuyển tới `operationsservice:8080` (HTTP):
+   - `/health/operations` -> `/health`
+   - `/api/v{version}/regions/**`
+   - `/api/v{version}/towers/**`
+   - `/api/v{version}/gis/{everything}`
+   - `/api/v{version}/uavs/**` & `/api/v{version}/drones/**`
+   - `/api/v{version}/flight-controllers/**`
+   - `/api/v{version}/devices/**`
+   - `/api/v{version}/pre-mission-assessments/**` & `/api/v{version}/assessments/**`
+   - `/api/v{version}/missions` & `/api/v{version}/missions/{everything}` (Priority = 1; riêng `/missions/{missionId}/ai-analysis/**` có Priority = 100 sẽ sang `aiinspectionservice`)
+   - `/api/v{version}/drone-technical-inspections/**`
+   - `/api/v{version}/inspections/upload` (Priority = 120) & `/api/v{version}/inspections/**`
+   - `/api/v{version}/alerts/**`
+   - `/api/v{version}/maintenance/tickets/**` & `/api/v{version}/maintenance/**`
+   - `/api/v{version}/reports/**`
+   - `/api/v{version}/monitor/**`
+   - `/api/v{version}/audit-logs/**`
+   - `/api/v{version}/users/{id}/geographic-scopes` (Priority = 100)
+   - `/images/{everything}` (Phục vụ file ảnh tĩnh local khi không dùng MinIO)
+
+3. Chuyển tới `aiinspectionservice:8080` (HTTP):
+   - `/health/ai-inspection` -> `/health`
+   - `/api/v{version}/missions/{missionId}/ai-analysis/**` (Priority = 100)
+   - `/api/v{version}/ai-analysis/**`
+   - `/api/v{version}/vision/**`
+   - `/api/v{version}/anomalies/**`
+
+4. Chuyển tới `notificationservice:8080` (HTTP & WebSocket):
+   - `/health/notifications` -> `/health`
+   - `/api/v{version}/notifications/**` (HTTP REST)
+   - `/api/v{version}/notifications/realtime/{everything}` (HTTP nội bộ)
+   - `/hubs/notifications` & `/hubs/notifications/{everything}` (Giao thức **WebSocket `ws`** cho SignalR)
+   - `/hangfire` & `/hangfire/{everything}` (Giao diện quản trị Hangfire Dashboard)
+
+5. Chuyển tới `fastapi-ai:8000` (HTTP):
+   - `/ai-service/{everything}` -> `/{everything}`
+
+================================================================================
+HẾT TÀI LIỆU
+================================================================================
+

@@ -10,7 +10,7 @@ public class MissionLifecycleTests
     public void CannotStartIfPending()
     {
         var mission = new Mission { Status = MissionStatus.Pending };
-        mission.Invoking(x => x.Start()).Should().Throw<InvalidOperationException>().WithMessage("*Mission must be Ready, Assigned, or Preparing*");
+        mission.Invoking(x => x.Start()).Should().Throw<InvalidOperationException>().WithMessage("*Mission must be Ready*");
     }
 
     [Fact]
@@ -26,26 +26,26 @@ public class MissionLifecycleTests
     [Fact]
     public void CannotStartWhileARequiredMemberHasNotAccepted()
     {
-        var mission = new Mission { Status = MissionStatus.Assigned, UavId = Guid.NewGuid() };
+        var mission = new Mission { Status = MissionStatus.Ready, UavId = Guid.NewGuid() };
         mission.Assignments.Add(new MissionAssignment { UserId = Guid.NewGuid(), ResponseStatus = MissionAssignmentResponse.Pending });
         mission.Invoking(x => x.Start()).Should().Throw<InvalidOperationException>().WithMessage("*required member*");
     }
 
     [Fact]
-    public void NewRequiredMemberSendsAssignedMissionBackToPendingAcceptance()
+    public void NewRequiredMemberSendsReadyMissionBackToPending()
     {
-        var mission = new Mission { Status = MissionStatus.Preparing, UavId = Guid.NewGuid() };
+        var mission = new Mission { Status = MissionStatus.Ready, UavId = Guid.NewGuid() };
         mission.Assignments.Add(new MissionAssignment { UserId = Guid.NewGuid(), ResponseStatus = MissionAssignmentResponse.Accepted });
         mission.Assignments.Add(new MissionAssignment { UserId = Guid.NewGuid(), ResponseStatus = MissionAssignmentResponse.Pending });
         mission.RecalculateReadiness().Should().BeFalse();
-        mission.Status.Should().Be(MissionStatus.PendingAcceptance);
+        mission.Status.Should().Be(MissionStatus.Pending);
     }
 
     [Fact]
     public void PendingOptionalMemberDoesNotBlockReadiness()
     {
         var inspector = Guid.NewGuid(); var drone = Guid.NewGuid();
-        var mission = new Mission { Status = MissionStatus.Preparing, UavId = drone };
+        var mission = new Mission { Status = MissionStatus.Ready, UavId = drone };
         mission.Assignments.Add(new MissionAssignment { UserId = inspector, ResponseStatus = MissionAssignmentResponse.Accepted });
         mission.Assignments.Add(new MissionAssignment { UserId = Guid.NewGuid(), IsRequired = false, ResponseStatus = MissionAssignmentResponse.Pending });
         mission.MissionTargets.Add(new MissionTarget { TowerId = Guid.NewGuid() });
@@ -56,19 +56,19 @@ public class MissionLifecycleTests
     }
 
     [Fact]
-    public void ResumeBeforeStartReturnsToPendingAcceptanceWhenARequiredMemberHasNotAccepted()
+    public void ResumeBeforeStartReturnsToPendingWhenARequiredMemberHasNotAccepted()
     {
-        var mission = new Mission { Status = MissionStatus.Suspended, UavId = Guid.NewGuid() };
+        var mission = new Mission { Status = MissionStatus.Postponed, UavId = Guid.NewGuid() };
         mission.Assignments.Add(new MissionAssignment { UserId = Guid.NewGuid(), ResponseStatus = MissionAssignmentResponse.Pending });
         mission.Resume();
-        mission.Status.Should().Be(MissionStatus.PendingAcceptance);
+        mission.Status.Should().Be(MissionStatus.Pending);
     }
 
     [Fact]
     public void ReadinessRequiresAssignmentsCheckInsDroneHandoverAndAssets()
     {
         var user = Guid.NewGuid(); var drone = Guid.NewGuid();
-        var mission = new Mission { Status = MissionStatus.Assigned, UavId = drone };
+        var mission = new Mission { Status = MissionStatus.Ready, UavId = drone };
         mission.Assignments.Add(new MissionAssignment { UserId = user, ResponseStatus = MissionAssignmentResponse.Accepted });
         mission.MissionTargets.Add(new MissionTarget { TowerId = Guid.NewGuid() });
         mission.RecalculateReadiness().Should().BeFalse();
@@ -81,12 +81,12 @@ public class MissionLifecycleTests
     }
 
     [Fact]
-    public void InProgressCompletesAndCannotNormallyCancel()
+    public void InProgressCompletesAndCannotCancelAfterCompleted()
     {
         var mission = new Mission { Status = MissionStatus.InProgress };
-        mission.Invoking(x => x.Cancel()).Should().Throw<InvalidOperationException>();
         mission.Complete();
         mission.Status.Should().Be(MissionStatus.Completed);
         mission.EndedAt.Should().NotBeNull();
+        mission.Invoking(x => x.Cancel()).Should().Throw<InvalidOperationException>();
     }
 }

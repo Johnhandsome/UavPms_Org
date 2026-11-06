@@ -305,7 +305,7 @@ public class MissionDroneExecutionTests
             RegionId = _regionId,
             Assignments = { new MissionAssignment { UserId = anotherInspectorId, AssignmentRole = "INSPECTOR" } },
             UavId = _droneId,
-            Status = MissionStatus.Assigned
+            Status = MissionStatus.Ready
         };
         _db.Missions.Add(mission);
         await _db.SaveChangesAsync();

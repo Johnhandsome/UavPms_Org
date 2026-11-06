@@ -42,7 +42,7 @@ public class MissionStateGuardTests
         var postponed = await w.CreateMissionAsync(Hour(1), Hour(3), i2, await w.AddDroneAsync(), new MissionPersonnelAssignmentRequest(analyst, "ANALYST", false));
         await w.As(analyst, UserRoles.Analyst, s => s.PostponeAssignmentAsync(postponed.Id, "Other duty", default));
         var afterOptional = await w.LoadMissionAsync(postponed.Id);
-        afterOptional.Status.Should().Be(MissionStatus.PendingAcceptance);
+        afterOptional.Status.Should().Be(MissionStatus.Pending);
         afterOptional.PostponeReason.Should().BeNull("an optional member only answers for themselves");
 
         await w.AsInspector(i2, s => s.PostponeAssignmentAsync(postponed.Id, "Equipment missing", default));
@@ -73,7 +73,7 @@ public class MissionStateGuardTests
         var mission = await w.CreateMissionAsync(Hour(1), Hour(3), inspector, await w.AddDroneAsync(), new MissionPersonnelAssignmentRequest(analyst, "ANALYST", false));
 
         await w.As(analyst, UserRoles.Analyst, s => s.ConfirmMissionAsync(mission.Id, "Ready", default));
-        (await w.LoadMissionAsync(mission.Id)).Status.Should().Be(MissionStatus.PendingAcceptance, "a non-required member cannot confirm the mission");
+        (await w.LoadMissionAsync(mission.Id)).Status.Should().Be(MissionStatus.Pending, "a non-required member cannot confirm the mission");
 
         var notMember = () => w.AsInspector(outsider, s => s.ConfirmMissionAsync(mission.Id, null, default));
         (await notMember.Should().ThrowAsync<ForbiddenException>()).Which.Message.Should().Contain("USER_NOT_ASSIGNED");
@@ -82,7 +82,7 @@ public class MissionStateGuardTests
         await inspectorPostpone.Should().ThrowAsync<ForbiddenException>();
 
         await w.AsInspector(inspector, s => s.ConfirmMissionAsync(mission.Id, "Ready", default));
-        (await w.LoadMissionAsync(mission.Id)).Status.Should().Be(MissionStatus.Assigned);
+        (await w.LoadMissionAsync(mission.Id)).Status.Should().Be(MissionStatus.Ready);
 
         await w.AsManager(s => s.PostponeMissionAsync(mission.Id, "Line maintenance", default));
         (await w.LoadMissionAsync(mission.Id)).Status.Should().Be(MissionStatus.Postponed);
@@ -129,31 +129,31 @@ public class MissionStateGuardTests
         var mission = await w.CreateMissionAsync(Hour(0), Hour(2), inspector, await w.AddDroneAsync());
         await w.AcceptAllAsync(mission);
         await w.AsInspector(inspector, s => s.CheckInAsync(mission.Id, default));
-        (await w.LoadMissionAsync(mission.Id)).Status.Should().Be(MissionStatus.Preparing);
+        (await w.LoadMissionAsync(mission.Id)).Status.Should().Be(MissionStatus.Ready);
 
         // An optional member does not block anything.
         await w.AsManager(s => s.AssignAsync(mission.Id, new Mf01Assignment(technician, "TECHNICIAN", IsRequired: false), default));
-        (await w.LoadMissionAsync(mission.Id)).Status.Should().Be(MissionStatus.Preparing);
+        (await w.LoadMissionAsync(mission.Id)).Status.Should().Be(MissionStatus.Ready);
 
         // A required one does, and the mission cannot start until they accept.
         await w.AsManager(s => s.AssignAsync(mission.Id, new Mf01Assignment(analyst, "ANALYST"), default));
-        (await w.LoadMissionAsync(mission.Id)).Status.Should().Be(MissionStatus.PendingAcceptance);
+        (await w.LoadMissionAsync(mission.Id)).Status.Should().Be(MissionStatus.Pending);
         await Expect("INVALID_MISSION_STATE", () => w.AsManager(s => s.StartAsync(mission.Id, default)));
         await w.As(analyst, UserRoles.Analyst, s => s.AcceptAssignmentAsync(mission.Id, default));
-        (await w.LoadMissionAsync(mission.Id)).Status.Should().Be(MissionStatus.Preparing, "the earlier check-in still counts");
+        (await w.LoadMissionAsync(mission.Id)).Status.Should().Be(MissionStatus.Ready, "the earlier check-in still counts");
 
         // Suspended before the start, a reassignment is checked again on resume.
         await w.AsManager(s => s.SuspendMissionAsync(mission.Id, "Paperwork", default));
         var analystAssignment = (await w.LoadMissionAsync(mission.Id)).Assignments.Single(a => a.UserId == analyst && a.Status == MissionAssignmentStatus.Active);
         await w.AsManager(s => s.ReassignAsync(mission.Id, analystAssignment.Id, analyst2, null, "Swap", default));
-        (await w.LoadMissionAsync(mission.Id)).Status.Should().Be(MissionStatus.Suspended);
+        (await w.LoadMissionAsync(mission.Id)).Status.Should().Be(MissionStatus.Postponed);
         await w.AsManager(s => s.ResumeMissionAsync(mission.Id, null, default));
-        (await w.LoadMissionAsync(mission.Id)).Status.Should().Be(MissionStatus.PendingAcceptance);
+        (await w.LoadMissionAsync(mission.Id)).Status.Should().Be(MissionStatus.Pending);
 
         // Removing the pending required member completes the acceptance; the last required one cannot be removed.
         var pending = (await w.LoadMissionAsync(mission.Id)).Assignments.Single(a => a.UserId == analyst2 && a.Status == MissionAssignmentStatus.Active);
         await w.AsManager(s => s.RemoveAssignmentAsync(mission.Id, pending.Id, default));
-        (await w.LoadMissionAsync(mission.Id)).Status.Should().Be(MissionStatus.Preparing);
+        (await w.LoadMissionAsync(mission.Id)).Status.Should().Be(MissionStatus.Ready);
         var last = (await w.LoadMissionAsync(mission.Id)).Assignments.Single(a => a.UserId == inspector && a.Status == MissionAssignmentStatus.Active);
         await Expect("REQUIRED_MEMBER_REQUIRED", () => w.AsManager(s => s.RemoveAssignmentAsync(mission.Id, last.Id, default)));
         (await w.BookingsAsync(mission.Id)).Single(b => b.UserId == analyst2).Status.Should().Be(ResourceBookingStatus.Cancelled);
@@ -189,7 +189,7 @@ public class MissionStateGuardTests
         seat.ResponseStatus.Should().Be(MissionAssignmentResponse.Pending);
 
         var after = await w.LoadMissionAsync(mission.Id);
-        after.Status.Should().Be(MissionStatus.PendingAcceptance);
+        after.Status.Should().Be(MissionStatus.Pending);
         var old = after.Assignments.Single(a => a.Id == inspectorSeat.Id);
         old.Status.Should().Be(MissionAssignmentStatus.Revoked);
         old.ResponseStatus.Should().Be(MissionAssignmentResponse.Replaced);
@@ -223,7 +223,7 @@ public class MissionStateGuardTests
         await w.AsManager(s => s.SuspendMissionAsync(mission.Id, "Check", default));
         await w.AsManager(s => s.ResumeMissionAsync(mission.Id, null, default));
 
-        (await w.LoadMissionAsync(mission.Id)).Status.Should().Be(MissionStatus.Assigned);
+        (await w.LoadMissionAsync(mission.Id)).Status.Should().Be(MissionStatus.Ready);
         var types = await w.Read(db => db.Notifications.Where(n => n.ReferenceId == mission.Id && n.UserId == analyst).Select(n => n.Type).ToListAsync());
         types.Count(t => t == "MISSION_SUSPENDED").Should().Be(1);
         types.Count(t => t == "MISSION_RESUMED").Should().Be(1);
@@ -277,7 +277,7 @@ public class MissionStateGuardTests
 
         var cancel = () => w.AsManager(s => s.CancelMissionAsync(mission.Id, null, default));
         (await cancel.Should().ThrowAsync<ForbiddenException>()).Which.Message.Should().Contain("ACTIVE_USER_REQUIRED");
-        (await w.LoadMissionAsync(mission.Id)).Status.Should().Be(MissionStatus.PendingAcceptance);
+        (await w.LoadMissionAsync(mission.Id)).Status.Should().Be(MissionStatus.Pending);
     }
 
     private static async Task Expect(string code, Func<Task> act) =>

@@ -219,11 +219,11 @@ Các thuộc tính đánh dấu `[NotMapped]` hoặc `Ignore()` trong code (`Mis
 | DroneOperationalStatus | Available, Reserved, InUse, Maintenance, Unavailable, Lost |
 | TechnicalHealth | Unknown, Healthy, Warning, Critical |
 | TechInspectionStatus | Pending, InProgress, Passed, Failed, Incomplete |
-| AssessmentStatus | Draft, Evaluating, Ready, NotReady, Expired, Completed, Cancelled |
+| AssessmentStatus | Evaluating, Ready, NotReady, Expired, Completed, Cancelled |
 | ResourceAvailability | Unknown, Available, Conflict, Unavailable |
 | ResourceEligibility | Unknown, Eligible, Ineligible, RequiresInspection |
 | UavScopeSuitability | Suitable, SuitableWithSplit, Unsuitable |
-| MissionStatus | Draft, PendingAcceptance, Assigned, Preparing, Ready, InProgress, Suspended, Postponed, Completed, Cancelled |
+| MissionStatus | Draft, Pending, Ready, Postponed, InProgress, Completed, Cancelled |
 | MissionType | Scheduled, AdHoc |
 | MissionPriority (smallint) | 0 Normal, 1 High, 2 Emergency |
 | InspectionObjective | PeriodicInspection, TargetedReinspection, IncidentFollowUp, EmergencyInspection |
@@ -236,10 +236,10 @@ Các thuộc tính đánh dấu `[NotMapped]` hoặc `Ignore()` trong code (`Mis
 | AnalysisType | DefectDetection, HumanMotionDetection, ObjectClassification, AssetConditionAssessment, General |
 | ExecutionLocation (`ai_analysis_runs`) | Edge, Cloud |
 | AIAnalysisStatus | Pending, Processing, Completed, Failed |
-| AnomalyStatus | Pending, Confirmed, Rejected, Resolved |
+| AnomalyStatus | Pending, InReview, Confirmed, Rejected |
 | AlertStatus | Active, Confirmed, Dismissed, Escalated |
 | EmergencyAlertPriority | Low, Medium, High, Critical |
-| TicketStatus | Open, InProgress, PendingVerification, Resolved, Closed |
+| TicketStatus | Open, Assigned, InProgress, PendingVerification, Closed |
 | TicketPriority | Low, Medium, High, Emergency |
 | ReportType | Defect, Periodic, Thermal, Corridor |
 | ReportStatus | Draft, Pending, Approved |

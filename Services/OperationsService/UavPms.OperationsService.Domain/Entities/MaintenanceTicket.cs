@@ -30,14 +30,19 @@ public class MaintenanceTicket : BaseEntity
     #region Rich Domain Methods
     public void AssignToTechnician(Guid technicianId)
     {
+        if (Status is not (TicketStatus.Open or TicketStatus.Assigned))
+        {
+            throw new InvalidOperationException($"Cannot assign technician to ticket in status '{Status}'. Must be Open or Assigned.");
+        }
         TechnicianId = technicianId;
         AssignedAt = DateTime.UtcNow;
+        Status = TicketStatus.Assigned;
     }
     public void StartProgress()
     {
-        if (Status != TicketStatus.Open)
+        if (Status is not (TicketStatus.Assigned or TicketStatus.Open))
         {
-            throw new InvalidOperationException($"Cannot start progress on ticket in status '{Status}'. Must be Open.");
+            throw new InvalidOperationException($"Cannot start progress on ticket in status '{Status}'. Must be Assigned or Open.");
         }
         if (TechnicianId == null)
         {
@@ -54,14 +59,22 @@ public class MaintenanceTicket : BaseEntity
         }
         Status = TicketStatus.PendingVerification;
     }
-    public void Resolve()
+    public void RejectVerification()
     {
-        Status = TicketStatus.Resolved;
-        ResolvedAt = DateTime.UtcNow;
+        if (Status != TicketStatus.PendingVerification)
+        {
+            throw new InvalidOperationException($"Cannot reject verification from status '{Status}'. Must be PendingVerification.");
+        }
+        Status = TicketStatus.InProgress;
     }
     public void Close()
     {
+        if (Status != TicketStatus.PendingVerification)
+        {
+            throw new InvalidOperationException($"Cannot close ticket from status '{Status}'. Must be PendingVerification.");
+        }
         Status = TicketStatus.Closed;
+        ResolvedAt = DateTime.UtcNow;
     }
     #endregion
 }

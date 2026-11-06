@@ -33,7 +33,7 @@ public class DetectedAnomaly : BaseEntity
     /// <summary>geometry(Point,4326)</summary>
     public Point? Location { get; set; }
     public double ConfidenceScore { get; set; }
-    public string ValidationStatus { get; set; } = string.Empty;
+    public string ValidationStatus { get; set; } = "Pending";
     public string AnalystNotes { get; set; } = string.Empty;
     public DateTime? ValidatedAt { get; set; }
 
@@ -45,6 +45,14 @@ public class DetectedAnomaly : BaseEntity
     public virtual User? Analyst { get; set; }
 
     #region Rich domain methods
+
+    public void MarkInReview()
+    {
+        if (ValidationStatus is "Confirmed" or "Rejected")
+            throw new InvalidOperationException($"Cannot transition anomaly from '{ValidationStatus}' to 'InReview'.");
+        ValidationStatus = "InReview";
+        UpdatedAt = DateTime.UtcNow;
+    }
 
     public void Confirm(Guid analystId, string notes)
     {

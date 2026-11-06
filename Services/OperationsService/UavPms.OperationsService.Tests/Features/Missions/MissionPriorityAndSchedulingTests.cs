@@ -186,7 +186,7 @@ public class MissionPriorityAndSchedulingTests
             Id = Guid.NewGuid(),
             MissionCode = "MS-EXISTING-001",
             Title = "Scheduled maintenance",
-            Status = MissionStatus.Assigned
+            Status = MissionStatus.Ready
         };
         db.Missions.Add(existingMission);
 

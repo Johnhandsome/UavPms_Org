@@ -529,7 +529,7 @@ public class PreMissionAssessmentServiceTests
             RegionId = region.Id,
             PlannedStart = DateTime.UtcNow.AddDays(1),
             PlannedEnd = DateTime.UtcNow.AddDays(1).AddHours(4),
-            Status = PreMissionAssessmentStatus.Draft
+            Status = PreMissionAssessmentStatus.Evaluating
         };
         db.PreMissionAssessments.Add(assessment);
         await db.SaveChangesAsync();
@@ -741,7 +741,7 @@ public class PreMissionAssessmentServiceTests
     [InlineData("not_ready", PreMissionAssessmentStatus.NotReady)]
     [InlineData("NOTREADY", PreMissionAssessmentStatus.NotReady)]
     [InlineData("READY", PreMissionAssessmentStatus.Ready)]
-    [InlineData("DRAFT", PreMissionAssessmentStatus.Draft)]
+    [InlineData("DRAFT", PreMissionAssessmentStatus.Evaluating)]
     [InlineData("EVALUATING", PreMissionAssessmentStatus.Evaluating)]
     [InlineData("EXPIRED", PreMissionAssessmentStatus.Expired)]
     [InlineData("CANCELLED", PreMissionAssessmentStatus.Cancelled)]
@@ -778,7 +778,7 @@ public class PreMissionAssessmentServiceTests
             Region = region,
             PlannedStart = DateTime.UtcNow.AddDays(1),
             PlannedEnd = DateTime.UtcNow.AddDays(1).AddHours(3),
-            Status = PreMissionAssessmentStatus.Draft
+            Status = PreMissionAssessmentStatus.Evaluating
         };
         db.PreMissionAssessments.Add(assessment);
         await db.SaveChangesAsync();

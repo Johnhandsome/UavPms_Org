@@ -10,7 +10,6 @@ public static class AssessmentMappingExtensions
     {
         var statusStr = entity.Status switch
         {
-            PreMissionAssessmentStatus.Draft => "DRAFT",
             PreMissionAssessmentStatus.Evaluating => "EVALUATING",
             PreMissionAssessmentStatus.Ready => "READY",
             PreMissionAssessmentStatus.NotReady => "NOT_READY",

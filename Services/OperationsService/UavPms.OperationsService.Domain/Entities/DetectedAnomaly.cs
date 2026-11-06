@@ -29,7 +29,7 @@ public class DetectedAnomaly : BaseEntity
     public string? ImageUrl { get; set; }
     public string? CropUrl { get; set; }
     public double ConfidenceScore { get; set; }
-    public string ValidationStatus { get; set; } = string.Empty;
+    public string ValidationStatus { get; set; } = "Pending";
     public string AnalystNotes { get; set; } = string.Empty;
     public string? AnalystFeedback { get; set; } = "{}";
     public DateTime? ValidatedAt { get; set; }
@@ -44,6 +44,14 @@ public class DetectedAnomaly : BaseEntity
     public virtual ICollection<MaintenanceTicket> MaintenanceTickets { get; set; } = new List<MaintenanceTicket>();
 
     #region Rich Domain Methods
+    public void MarkInReview()
+    {
+        if (ValidationStatus is "Confirmed" or "Rejected")
+            throw new InvalidOperationException($"Cannot transition anomaly from '{ValidationStatus}' to 'InReview'.");
+        ValidationStatus = "InReview";
+        UpdatedAt = DateTime.UtcNow;
+    }
+
     public void Validate(Guid analystId, string notes, bool isConfirmed)
     {
         if (isConfirmed && !TowerId.HasValue)

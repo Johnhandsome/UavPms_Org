@@ -188,11 +188,11 @@ public class MissionConfiguration : IEntityTypeConfiguration<Mission>
         }
 
         var normalized = value.Trim().Replace(" ", string.Empty).Replace("_", string.Empty);
-        if (normalized.Equals("Pending", StringComparison.OrdinalIgnoreCase)) return MissionStatus.Draft;
+        if (normalized.Equals("Pending", StringComparison.OrdinalIgnoreCase) || normalized.Equals("PendingAcceptance", StringComparison.OrdinalIgnoreCase)) return MissionStatus.Pending;
         if (normalized.Equals("Executing", StringComparison.OrdinalIgnoreCase)) return MissionStatus.InProgress;
-        if (normalized.Equals("PENDINGCONFIRMATION", StringComparison.OrdinalIgnoreCase)) return MissionStatus.PendingAcceptance;
-        if (normalized.Equals("CONFIRMED", StringComparison.OrdinalIgnoreCase)) return MissionStatus.Assigned;
-        if (normalized.Equals("SUSPENDED", StringComparison.OrdinalIgnoreCase)) return MissionStatus.Suspended;
+        if (normalized.Equals("PENDINGCONFIRMATION", StringComparison.OrdinalIgnoreCase)) return MissionStatus.Pending;
+        if (normalized.Equals("CONFIRMED", StringComparison.OrdinalIgnoreCase) || normalized.Equals("Assigned", StringComparison.OrdinalIgnoreCase) || normalized.Equals("Preparing", StringComparison.OrdinalIgnoreCase)) return MissionStatus.Ready;
+        if (normalized.Equals("SUSPENDED", StringComparison.OrdinalIgnoreCase)) return MissionStatus.Postponed;
         if (normalized.Equals("POSTPONED", StringComparison.OrdinalIgnoreCase)) return MissionStatus.Postponed;
 
         return Enum.TryParse<MissionStatus>(normalized, true, out var status)
@@ -231,7 +231,7 @@ public class PreMissionAssessmentConfiguration : IEntityTypeConfiguration<PreMis
         builder.ToTable("PreMissionAssessments", t =>
         {
             t.HasCheckConstraint("CK_PreMissionAssessments_PlannedWindow", "\"PlannedEnd\" > \"PlannedStart\"");
-            t.HasCheckConstraint("CK_PreMissionAssessments_Status", "\"Status\" IN ('DRAFT', 'EVALUATING', 'READY', 'NOT_READY', 'EXPIRED', 'COMPLETED', 'CANCELLED')");
+            t.HasCheckConstraint("CK_PreMissionAssessments_Status", "\"Status\" IN ('EVALUATING', 'READY', 'NOT_READY', 'EXPIRED', 'COMPLETED', 'CANCELLED')");
         });
         builder.HasKey(x => x.Id);
         builder.Property(x => x.Status)
@@ -254,7 +254,7 @@ public class PreMissionAssessmentConfiguration : IEntityTypeConfiguration<PreMis
     {
         PreMissionAssessmentStatus.NotReady => "NOT_READY",
         PreMissionAssessmentStatus.Completed => "COMPLETED",
-        PreMissionAssessmentStatus.Draft => "DRAFT",
+        // Draft removed per state diagram
         PreMissionAssessmentStatus.Evaluating => "EVALUATING",
         PreMissionAssessmentStatus.Ready => "READY",
         PreMissionAssessmentStatus.Expired => "EXPIRED",
@@ -264,14 +264,14 @@ public class PreMissionAssessmentConfiguration : IEntityTypeConfiguration<PreMis
 
     private static PreMissionAssessmentStatus ParseAssessmentStatus(string? value)
     {
-        if (string.IsNullOrWhiteSpace(value)) return PreMissionAssessmentStatus.Draft;
+        if (string.IsNullOrWhiteSpace(value)) return PreMissionAssessmentStatus.Evaluating;
         var normalized = value.Trim().Replace(" ", string.Empty).Replace("_", string.Empty);
         if (normalized.Equals("CONSUMED", StringComparison.OrdinalIgnoreCase)) return PreMissionAssessmentStatus.Completed;
         if (normalized.Equals("INCOMPLETE", StringComparison.OrdinalIgnoreCase)) return PreMissionAssessmentStatus.NotReady;
         if (normalized.Equals("NOTREADY", StringComparison.OrdinalIgnoreCase)) return PreMissionAssessmentStatus.NotReady;
         return Enum.TryParse<PreMissionAssessmentStatus>(normalized, true, out var status)
             ? status
-            : PreMissionAssessmentStatus.Draft;
+            : PreMissionAssessmentStatus.Evaluating;
     }
 }
 
@@ -656,7 +656,7 @@ public class MaintenanceTicketConfiguration : IEntityTypeConfiguration<Maintenan
         // GeographicAccessFilter: open tickets of the current technician (plan 3.5).
         builder.HasIndex(e => new { e.TechnicianId, e.Status });
 
-        builder.Property(e => e.Status).HasConversion<string>();
+        builder.Property(e => e.Status).HasConversion(v => v.ToString(), v => ParseTicketStatus(v));
         builder.Property(e => e.Priority).HasConversion<string>();
         
         builder.HasOne(e => e.Anomaly)
@@ -674,6 +674,13 @@ public class MaintenanceTicketConfiguration : IEntityTypeConfiguration<Maintenan
             .HasForeignKey(e => e.TechnicianId)
             .IsRequired(false)
             .OnDelete(DeleteBehavior.Restrict);
+    }
+
+    private static TicketStatus ParseTicketStatus(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return TicketStatus.Open;
+        if (string.Equals(value, "Resolved", StringComparison.OrdinalIgnoreCase)) return TicketStatus.Closed;
+        return Enum.TryParse<TicketStatus>(value, true, out var status) ? status : TicketStatus.Open;
     }
 }
 

@@ -1,6 +1,6 @@
 # Review Report 1 – 3 (24/10/2026)
 
-Phạm vi: `report1/GFA26SE66_Report1_Project_Introduction.md`, `report2/GFA26SE66_Report2_Project_Management_Plan.docx.md`, `report3/GFA26SE66_Report3_Software_Requirements_Specification.docx.md` (bản export từ Docs) và `report3/..._v0.4.md` (bản SRS đã căn theo code). Đối chiếu với BE (`E:\UavPms_BE\UavPms_Org`) và FE (`E:\UavPms_FE\UavPms_FE`).
+Phạm vi: `report1/GFA26SE66_Report1_Project_Introduction.md`, `report2/GFA26SE66_Report2_Project_Management_Plan.docx.md`, `report3/GFA26SE66_Report3_Software_Requirements_Specification.md` (bản SRS chính thức đã chuẩn hóa và căn theo code). Đối chiếu với BE (`E:\UavPms_BE\UavPms_Org`) và FE (`E:\UavPms_FE\UavPms_FE`).
 
 Ký hiệu cột **Sửa ở đâu**: *Doc* = chỉ sửa tài liệu; *Code* = tài liệu đúng, code phải sửa; *Quyết định* = nhóm cần chọn sửa bên nào.
 
@@ -10,7 +10,7 @@ Ký hiệu cột **Sửa ở đâu**: *Doc* = chỉ sửa tài liệu; *Code* = 
 
 | # | Vấn đề | Sửa ở đâu |
 |---|---|---|
-| 0.1 | Có **hai bản Report 3 lệch nhau**. File `.docx.md` (vừa export) là nội dung cũ ~07/10: login bằng username + khoá tài khoản, kết quả *Needs Review*, *Site Conditions*, *Field Completed*, flight altitude/speed, Field Execution Console… — đều đã bị loại bỏ ở v0.3/v0.4 vì không khớp code. Bản đúng là `_v0.4.md`. | Doc: đưa nội dung v0.4 (đã cập nhật hôm nay) vào Google Docs rồi export lại |
+| 0.1 | Đã dọn dẹp và hợp nhất: Xóa file `.docx.md` cũ bị lệch, chuẩn hóa bản SRS chuẩn thành `GFA26SE66_Report3_Software_Requirements_Specification.md` và chuyển toàn bộ diagrams về thư mục chung `docs/diagrams/`. | Đã hoàn tất |
 | 0.2 | **Asset Health đã bỏ khỏi scope nhưng code BE và FE vẫn còn và vẫn chạy**: trừ điểm sức khoẻ khi confirm defect, cộng +15 khi đóng ticket, `GET /assets/health-summary`, cột `HealthScore/RiskLevel`, bảng `AssetHealthHistory`, `TowerConditionHistory`; FE `/assets` vẫn là `AssetHealthDashboard` (“Sức khỏe & Rủi ro Thiết bị”), GIS drawer, tab *Tài sản* trong Mission Detail (dữ liệu mock 38/54/68/92/96), notification `newHealthScore`. Lưu ý: `Asset.LastInspectedAt` (SCR-07 hiển thị) hiện chỉ được cập nhật bởi code health — gỡ health thì phải giữ lại phần cập nhật này. | Code (BE + FE) |
 | 0.3 | **Bộ lớp lỗi và mô hình AI không thống nhất giữa 3 report**: Report 1/2 = 6 lớp (`insulator, insulator_broken, insulator_flashover, bird_nest, foreign_object, broken_strand`) và YOLO11/YOLO26/RT-DETR; SRS = 7 lớp DC-01…DC-07 và YOLO11s/SDI/SCI/StructDETR; DB seed lại là `CORROSION, CRACK, HOTSPOT, VEGETATION`. Vì BR-51 bắt buộc map đúng mã category, kết quả AI mang mã DC-xx hay nhãn 6 lớp sẽ bị từ chối. | Quyết định → chốt 1 taxonomy, sửa SRS Table 61 + seed DB + mô tả model trong SRS (Product Overview, NFR-AI, Abbreviations) |
 
@@ -38,11 +38,11 @@ Ký hiệu cột **Sửa ở đâu**: *Doc* = chỉ sửa tài liệu; *Code* = 
 | 2.6 | Table 7 #2 | Report 2 due 24/09/2026 nhưng đã sửa đến 24/10. | Ghi “v1 24/09/2026, revised 24/10/2026”. |
 | 2.7 | 1.2 Objectives | “four students” nhưng 1.2 Report 1 có 4 thành viên + 2 GVHD — đúng, chỉ cần thống nhất mã SV (Report 2 Table 8 có mã SV, Report 1 không). | Tuỳ chọn. |
 
-## 3. Report 3 – SRS (`_v0.4.md`)
+## 3. Report 3 – SRS (`GFA26SE66_Report3_Software_Requirements_Specification.md`)
 
 ### 3.1 Đã sửa trực tiếp trong file v0.4 (ghi vào Record of Changes là v0.5)
 
-- **3.1.1 Screens Flow**: vẽ lại theo route và role guard thực tế của FE; file draw.io mới `report3_diagrams/Screen_Flow_Diagram_v0.5.drawio` (mở bằng draw.io, export SVG/PNG để chèn Word). Mermaid trong md cũng đã thay.
+- **3.1.1 Screens Flow**: vẽ lại theo route và role guard thực tế của FE; file draw.io trong `docs/diagrams/Screen_Flow_Diagram-Page-2.drawio.svg`. Mermaid trong md cũng đã thay.
 - **3.1.2 Screen Descriptions**: mô tả theo đúng tab/dialog thực tế (SCR-10 Workspace 5 tab: Tổng quan & bản đồ, Mặt bằng tuyến & khí tượng, Ứng viên nhân sự, Ứng viên UAV, Kiểm định BIST; SCR-11 có 2 tab; SCR-13 có 7 tab; SCR-18 và SCR-26 là một phần của SCR-13; SCR-23 chỉ còn dialog Reject).
 - **3.1.3 Screen Authorization**: ma trận theo 5 role, mỗi user 1 role.
 - **Bỏ công thức**: BR-17, BR-21, BR-23, BR-53, bước 6 UC-MF01-02, checklist UC-MF01-05; bỏ 2 dòng `Ai:EmergencyWeight`, `Ai:MaxConfidenceWeight` trong Table 57.
