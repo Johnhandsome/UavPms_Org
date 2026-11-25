@@ -113,6 +113,7 @@ public static class DependencyInjection
         services.AddScoped<IUavRepository, UavRepository>();
         services.AddScoped<IReportRepository, ReportRepository>();
         services.AddScoped<IReportExportService, ReportExportService>();
+        services.AddScoped<UavPms.OperationsService.Application.Features.Inspections.ChunkedUpload.IChunkedMediaUploadService, ChunkedMediaUploadService>();
 
         // Đăng ký Notification Repository
         services.AddScoped<INotificationRepository, NotificationRepository>();

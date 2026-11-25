@@ -5,16 +5,28 @@ namespace UavPms.OperationsService.Application.Features.Inspections.Commands.Upl
 
 public class UploadInspectionImageCommandValidator : AbstractValidator<UploadInspectionImageCommand>
 {
-    private static readonly string[] AllowedContentTypes = { "image/jpeg", "image/webp", "image/png", "image/tiff", "video/mp4" };
-    private static readonly string[] AllowedExtensions = { ".jpg", ".jpeg", ".webp", ".png", ".tif", ".tiff", ".mp4" };
-    
-    private readonly long _maxFileSizeBytes;
+    private static readonly string[] AllowedContentTypes =
+    {
+        "image/jpeg", "image/webp", "image/png", "image/tiff",
+        "video/mp4", "video/quicktime", "video/webm"
+    };
+    private static readonly string[] AllowedExtensions =
+    {
+        ".jpg", ".jpeg", ".webp", ".png", ".tif", ".tiff",
+        ".mp4", ".mov", ".webm"
+    };
+
+    private readonly long _maxImageSizeBytes;
+    private readonly long _maxVideoSizeBytes;
 
     public UploadInspectionImageCommandValidator(IConfiguration? configuration = null)
     {
-        _maxFileSizeBytes = long.TryParse(configuration?["InspectionMedia:MaxFileSizeBytes"], out var configuredLimit)
-            ? configuredLimit
+        _maxImageSizeBytes = long.TryParse(configuration?["InspectionMedia:MaxFileSizeBytes"], out var configuredImageLimit) && configuredImageLimit > 0
+            ? configuredImageLimit
             : 50L * 1024 * 1024;
+        _maxVideoSizeBytes = long.TryParse(configuration?["InspectionMedia:MaxVideoSizeBytes"], out var configuredVideoLimit) && configuredVideoLimit > 0
+            ? configuredVideoLimit
+            : 500L * 1024 * 1024;
         RuleFor(x => x.MissionId).NotEmpty().WithMessage("Mission ID is required.");
         
         RuleFor(x => x.TowerId).Must(id => id != Guid.Empty).When(x => x.TowerId.HasValue).WithMessage("Tower ID is invalid.");
@@ -22,17 +34,24 @@ public class UploadInspectionImageCommandValidator : AbstractValidator<UploadIns
         RuleFor(x => x.FileStream).NotEmpty().WithMessage("File stream is required.");
 
         RuleFor(x => x.FileStream).NotNull().WithMessage("File stream cannot be null.")
-             .Must(stream => stream != null && stream.Length > 0).WithMessage("Image file is required.")
-             .Must(stream => stream != null && stream.Length <= _maxFileSizeBytes)
-             .WithMessage($"File size exceeds the {_maxFileSizeBytes / 1024 / 1024}MB limit.");
+             .Must(stream => stream != null && stream.Length > 0).WithMessage("Media file is required.");
+
+        RuleFor(x => x)
+             .Must(x => x.FileStream != null && x.FileStream.Length <= MaxSizeFor(x.ContentType, x.FileName))
+             .When(x => x.FileStream != null)
+             .WithMessage(x =>
+             {
+                 var limitMb = MaxSizeFor(x.ContentType, x.FileName) / 1024 / 1024;
+                 return $"File size exceeds the {limitMb}MB limit.";
+             });
          
         RuleFor(x => x.ContentType).NotEmpty().WithMessage("Content type is required.")
              .Must(ct => !string.IsNullOrEmpty(ct) && AllowedContentTypes.Contains(ct.ToLower()))
-             .WithMessage("Invalid file type. Allowed: JPEG, PNG, WebP, TIFF, MP4.");
+             .WithMessage("Invalid file type. Allowed: JPEG, PNG, WebP, TIFF, MP4, MOV, WebM.");
 
         RuleFor(x => x.FileName).NotEmpty()
             .Must(name => AllowedExtensions.Contains(Path.GetExtension(Path.GetFileName(name)).ToLowerInvariant()))
-            .WithMessage("Invalid file extension. Allowed: JPEG, PNG, WebP, TIFF, MP4.");
+            .WithMessage("Invalid file extension. Allowed: JPEG, PNG, WebP, TIFF, MP4, MOV, WebM.");
 
         RuleFor(x => x)
             .Must(x => ExtensionMatchesMimeType(x.FileName, x.ContentType))
@@ -55,6 +74,13 @@ public class UploadInspectionImageCommandValidator : AbstractValidator<UploadIns
             .WithMessage("Latitude and longitude must be supplied together.");
     }
 
+    private long MaxSizeFor(string? contentType, string? fileName)
+    {
+        var isVideo = (!string.IsNullOrWhiteSpace(contentType) && contentType.StartsWith("video/", StringComparison.OrdinalIgnoreCase))
+            || Path.GetExtension(Path.GetFileName(fileName ?? string.Empty)).ToLowerInvariant() is ".mp4" or ".mov" or ".webm";
+        return isVideo ? _maxVideoSizeBytes : _maxImageSizeBytes;
+    }
+
     private static bool ExtensionMatchesMimeType(string fileName, string contentType)
     {
         var extension = Path.GetExtension(Path.GetFileName(fileName)).ToLowerInvariant();
@@ -65,6 +91,8 @@ public class UploadInspectionImageCommandValidator : AbstractValidator<UploadIns
             "image/webp" => extension == ".webp",
             "image/tiff" => extension is ".tif" or ".tiff",
             "video/mp4" => extension == ".mp4",
+            "video/quicktime" => extension == ".mov",
+            "video/webm" => extension == ".webm",
             _ => false
         };
     }

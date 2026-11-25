@@ -42,6 +42,12 @@ x-service-environment: &service-environment
   MockAI__ImageConcurrency: ${MOCK_AI_IMAGE_CONCURRENCY:-2}
   MockAI__VideoConcurrency: ${MOCK_AI_VIDEO_CONCURRENCY:-1}
 
+  # Media upload limits: 50 MiB per HTTP request, 40 MiB max per video chunk, 500 MiB max assembled video.
+  InspectionMedia__MaxFileSizeBytes: ${MAX_IMAGE_SIZE_BYTES:-52428800}
+  InspectionMedia__MaxChunkSizeBytes: ${MAX_CHUNK_SIZE_BYTES:-41943040}
+  InspectionMedia__MaxVideoSizeBytes: ${MAX_VIDEO_SIZE_BYTES:-524288000}
+  InspectionMedia__MaxRequestBodySizeBytes: ${MAX_REQUEST_BODY_SIZE_BYTES:-54525952}
+
   # Media object storage (MinIO S3 API, not the 9001 console). Credentials live only in the server .env.
   Minio__Endpoint: ${MINIO_ENDPOINT:-}
   Minio__AccessKey: ${MINIO_ACCESS_KEY:-}
@@ -131,6 +137,7 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Production}
       Gateway__UseLocalDownstreams: ${GATEWAY_USE_LOCAL_DOWNSTREAMS:-false}
+      InspectionMedia__MaxRequestBodySizeBytes: ${MAX_REQUEST_BODY_SIZE_BYTES:-54525952}
 
       Cors__AllowedOrigins__0: ${CORS_ALLOWED_ORIGIN_0:-http://localhost:3000}
       Cors__AllowedOrigins__1: ${CORS_ALLOWED_ORIGIN_1:-http://localhost:5173}
