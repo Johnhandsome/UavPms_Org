@@ -71,4 +71,64 @@ public class UserRepository : GenericRepository<User>, IUserRepository
 
         return (items, totalItems);
     }
+
+    public async Task<List<Guid>> GetUserRegionIdsAsync(Guid userId)
+    {
+        return await _context.UserGeographicScopes
+            .AsNoTracking()
+            .Where(s => s.UserId == userId)
+            .Select(s => s.RegionId)
+            .Distinct()
+            .ToListAsync();
+    }
+
+    public async Task<(List<User> Items, int TotalItems)> GetUsersInRegionsPagedAsync(
+        int page,
+        int pageSize,
+        string? search,
+        IReadOnlyCollection<Guid> regionIds,
+        bool includeUnassignedOperationalUsers = false)
+    {
+        if (regionIds == null || regionIds.Count == 0)
+        {
+            return (new List<User>(), 0);
+        }
+
+        var operationalRoles = new[]
+        {
+            UavPms.Shared.Contracts.Constants.UserRoles.Inspector,
+            UavPms.Shared.Contracts.Constants.UserRoles.Analyst,
+            UavPms.Shared.Contracts.Constants.UserRoles.Technician
+        };
+
+        var query = _context.Users
+            .Include(u => u.UserRoles)
+                .ThenInclude(ur => ur.Role)
+            .Where(u => !u.UserRoles.Any(ur => ur.Role!.RoleName == UavPms.Shared.Contracts.Constants.UserRoles.SystemAdmin))
+            .Where(u =>
+                _context.UserGeographicScopes.Any(s => s.UserId == u.Id && regionIds.Contains(s.RegionId)) ||
+                (includeUnassignedOperationalUsers &&
+                 !_context.UserGeographicScopes.Any(s => s.UserId == u.Id) &&
+                 u.UserRoles.Any(ur => operationalRoles.Contains(ur.Role!.RoleName))));
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var lowerSearch = search.ToLower();
+            query = query.Where(u =>
+                u.Phone.ToLower().Contains(lowerSearch) ||
+                u.Email.ToLower().Contains(lowerSearch) ||
+                u.FullName.ToLower().Contains(lowerSearch)
+            );
+        }
+
+        var totalItems = await query.CountAsync();
+
+        var items = await query
+            .OrderByDescending(u => u.CreatedAt)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync();
+
+        return (items, totalItems);
+    }
 }

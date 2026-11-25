@@ -53,6 +53,17 @@ public class GlobalExceptionHandler : IExceptionHandler
                 ErrorCode: "UNAUTHORIZED"
             );
         }
+        else if (exception is ForbiddenException forbiddenException)
+        {
+            httpContext.Response.StatusCode = (int)HttpStatusCode.Forbidden;
+            apiResponse = new ApiResponse(
+                Success: false,
+                Message: forbiddenException.Message,
+                Data: null,
+                Errors: null,
+                ErrorCode: "FORBIDDEN"
+            );
+        }
         else if (exception is NotFoundException notFoundException)
         {
             httpContext.Response.StatusCode = (int)HttpStatusCode.NotFound;

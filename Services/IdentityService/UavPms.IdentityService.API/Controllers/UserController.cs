@@ -49,11 +49,12 @@ public class UserController : ControllerBase
     }
 
     [HttpGet]
-    [Authorize(Roles = UserRoles.AdminOnly)]
+    [Authorize(Roles = UserRoles.AdminAndManager)]
     public async Task<IActionResult> GetUsers(
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 10,
-        [FromQuery] string? search = null)
+        [FromQuery] string? search = null,
+        [FromQuery] bool includeUnassigned = false)
     {
         if (page <= 0 || pageSize <= 0)
         {
@@ -65,7 +66,7 @@ public class UserController : ControllerBase
             return BadRequest(new ApiResponse(false, "PageSize must be less than or equal to 100."));
         }
 
-        var result = await _mediator.Send(new GetUsersQuery(page, pageSize, search));
+        var result = await _mediator.Send(new GetUsersQuery(page, pageSize, search, includeUnassigned));
         return Ok(new ApiResponse(true, "Users retrieved successfully.", result));
     }
 
@@ -78,7 +79,7 @@ public class UserController : ControllerBase
     }
 
     [HttpGet("{id:guid}")]
-    [Authorize(Roles = UserRoles.AdminOnly)]
+    [Authorize(Roles = UserRoles.AdminAndManager)]
     public async Task<IActionResult> GetUserById(Guid id)
     {
         try
