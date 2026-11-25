@@ -776,7 +776,7 @@ public sealed class PreMissionAssessmentService : IPreMissionAssessmentService
                 .Select(p => p.UserId)
                 .FirstOrDefault(request.Personnel[0].UserId);
 
-            // Gap #11: Mission starts at PendingAcceptance
+            // Mission starts in Draft so Manager/Admin can review/adjust before explicitly dispatching to members.
             var mission = new Mission
             {
                 MissionCode = $"MS-{DateTime.UtcNow:yyyyMMddHHmmssfff}-{RandomNumberGenerator.GetInt32(100, 1000)}",
@@ -793,7 +793,7 @@ public sealed class PreMissionAssessmentService : IPreMissionAssessmentService
                 Objective = request.Objective,
                 TriggerReason = request.EmergencyReason,
                 IsImmediate = request.IsImmediate,
-                Status = MissionStatus.PendingAcceptance,
+                Status = MissionStatus.Draft,
                 PreMissionAssessmentId = assessment.Id,
                 Boundary = assessment.ProposedBoundary,
                 IdempotencyKey = request.IdempotencyKey,
@@ -878,7 +878,7 @@ public sealed class PreMissionAssessmentService : IPreMissionAssessmentService
                 OccurredAt = DateTime.UtcNow
             });
 
-            // Audit & Notification
+            // Audit (member notifications are dispatched when Manager/Admin transitions Draft -> PendingAcceptance)
             Audit(mission.Id, "MISSION_CREATED_FROM_ASSESSMENT", "{}", JsonSerializer.Serialize(new
             {
                 Priority = mission.Priority.ToString(),
@@ -887,10 +887,6 @@ public sealed class PreMissionAssessmentService : IPreMissionAssessmentService
                 EmergencyReason = mission.TriggerReason,
                 IsImmediate = mission.IsImmediate
             }), "Missions");
-            foreach (var p in request.Personnel)
-            {
-                Notify(p.UserId, mission, "MISSION_DISPATCH", p.Role);
-            }
 
             try
             {

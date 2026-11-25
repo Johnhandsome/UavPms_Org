@@ -24,6 +24,8 @@ public static class InspectionMediaFileValidator
                 "image/webp" => IsWebP(stream, header),
                 "image/tiff" => IsTiff(stream, header),
                 "video/mp4" => IsMp4(stream, header),
+                "video/quicktime" => IsQuickTime(stream, header),
+                "video/webm" => IsWebM(header),
                 _ => false
             };
         }
@@ -76,4 +78,17 @@ public static class InspectionMediaFileValidator
         var boxSize = (uint)(header[0] << 24 | header[1] << 16 | header[2] << 8 | header[3]);
         return boxSize >= 8 && boxSize <= stream.Length;
     }
+
+    private static bool IsQuickTime(Stream stream, ReadOnlySpan<byte> header)
+    {
+        if (IsMp4(stream, header)) return true;
+        var atom = header[4..8];
+        if (!atom.SequenceEqual("moov"u8) && !atom.SequenceEqual("wide"u8) && !atom.SequenceEqual("mdat"u8) && !atom.SequenceEqual("free"u8))
+            return false;
+        var boxSize = (uint)(header[0] << 24 | header[1] << 16 | header[2] << 8 | header[3]);
+        return boxSize >= 8 && boxSize <= stream.Length;
+    }
+
+    private static bool IsWebM(ReadOnlySpan<byte> header) =>
+        header[0] == 0x1A && header[1] == 0x45 && header[2] == 0xDF && header[3] == 0xA3;
 }

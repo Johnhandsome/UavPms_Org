@@ -29,18 +29,24 @@ x-service-environment: &service-environment
   Cors__AllowedOrigins__4: ${CORS_ALLOWED_ORIGIN_4:-https://uavpms.ddns.net}
 
   AIService__ServiceKey: ${AIService_ServiceKey}
-  InternalServices__SharedKey: ${INTERNAL_SERVICES_SHARED_KEY:-uavpms-internal-shared-key}
+  InternalServices__SharedKey: ${INTERNAL_SERVICES_SHARED_KEY:?INTERNAL_SERVICES_SHARED_KEY must be set in .env}
 
   # Demo AI worker (no real model deployed yet): results go through the real callback path, so anomalies,
-  # alerts and notifications are stored for real. Set MOCK_AI_ENABLED=false once a real AI worker consumes
-  # the ai.analysis.server.* queues, otherwise both compete for the same messages.
-  MockAI__Enabled: ${MOCK_AI_ENABLED:-true}
+  # alerts and notifications are stored for real. Defaults to false on production so it never competes with
+  # the real AI worker/bridge on ai.analysis.server.* queues.
+  MockAI__Enabled: ${MOCK_AI_ENABLED:-false}
   MockAI__CategoryCode: ${MOCK_AI_CATEGORY_CODE:-}
   MockAI__Confidence: ${MOCK_AI_CONFIDENCE:-}
   MockAI__MaxDetections: ${MOCK_AI_MAX_DETECTIONS:-3}
   MockAI__EmergencyRate: ${MOCK_AI_EMERGENCY_RATE:-0.2}
   MockAI__ImageConcurrency: ${MOCK_AI_IMAGE_CONCURRENCY:-2}
   MockAI__VideoConcurrency: ${MOCK_AI_VIDEO_CONCURRENCY:-1}
+
+  # Media upload limits: 50 MiB per HTTP request, 40 MiB max per video chunk, 500 MiB max assembled video.
+  InspectionMedia__MaxFileSizeBytes: ${MAX_IMAGE_SIZE_BYTES:-52428800}
+  InspectionMedia__MaxChunkSizeBytes: ${MAX_CHUNK_SIZE_BYTES:-41943040}
+  InspectionMedia__MaxVideoSizeBytes: ${MAX_VIDEO_SIZE_BYTES:-524288000}
+  InspectionMedia__MaxRequestBodySizeBytes: ${MAX_REQUEST_BODY_SIZE_BYTES:-54525952}
 
   # Media object storage (MinIO S3 API, not the 9001 console). Credentials live only in the server .env.
   Minio__Endpoint: ${MINIO_ENDPOINT:-}
@@ -51,8 +57,8 @@ x-service-environment: &service-environment
   Minio__PublicBaseUrl: ${MINIO_PUBLIC_BASE_URL:-}
 
   RabbitMQ__HostName: rabbitmq
-  RabbitMQ__UserName: ${RABBITMQ_USER:-guest}
-  RabbitMQ__Password: ${RABBITMQ_PASSWORD:-guest}
+  RabbitMQ__UserName: ${RABBITMQ_USER:?RABBITMQ_USER must be set in .env}
+  RabbitMQ__Password: ${RABBITMQ_PASSWORD:?RABBITMQ_PASSWORD must be set in .env}
   RabbitMQ__Port: 5672
 
   GrpcServices__InspectionEvaluationUrl: http://inspectionevaluationservice:8080
@@ -84,8 +90,11 @@ services:
   redis:
     image: redis:alpine
     container_name: uav-redis
+    command: ["sh", "-c", "exec redis-server --requirepass \"$REDIS_PASSWORD\""]
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD must be set in .env}
     ports:
-      - "6379:6379"
+      - "127.0.0.1:${REDIS_PORT:-6379}:6379"
     restart: always
 
 
@@ -94,12 +103,12 @@ services:
     container_name: uav-rabbitmq
 
     environment:
-      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-guest}
-      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-guest}
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:?RABBITMQ_USER must be set in .env}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?RABBITMQ_PASSWORD must be set in .env}
 
     ports:
-      - "${RABBITMQ_AMQP_PORT:-5672}:5672"
-      - "${RABBITMQ_MANAGEMENT_PORT:-15672}:15672"
+      - "127.0.0.1:${RABBITMQ_AMQP_PORT:-5672}:5672"
+      - "127.0.0.1:${RABBITMQ_MANAGEMENT_PORT:-15672}:15672"
 
     expose:
       - "5672"
@@ -128,6 +137,7 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Production}
       Gateway__UseLocalDownstreams: ${GATEWAY_USE_LOCAL_DOWNSTREAMS:-false}
+      InspectionMedia__MaxRequestBodySizeBytes: ${MAX_REQUEST_BODY_SIZE_BYTES:-54525952}
 
       Cors__AllowedOrigins__0: ${CORS_ALLOWED_ORIGIN_0:-http://localhost:3000}
       Cors__AllowedOrigins__1: ${CORS_ALLOWED_ORIGIN_1:-http://localhost:5173}

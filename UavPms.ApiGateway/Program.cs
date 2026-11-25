@@ -6,11 +6,12 @@ using Microsoft.AspNetCore.Server.Kestrel.Core;
 using System.Text.Json.Nodes;
 
 var builder = WebApplication.CreateBuilder(args);
+var maxRequestBodySizeBytes = builder.Configuration.GetValue<long?>("InspectionMedia:MaxRequestBodySizeBytes")
+    ?? (52L * 1024 * 1024);
 builder.WebHost.ConfigureKestrel(options =>
 {
-    // Allow multipart uploads up to the API's 50 MiB business limit plus
-    // multipart headers while the gateway proxies the request downstream.
-    options.Limits.MaxRequestBodySize = 52L * 1024 * 1024;
+    // Cap each HTTP request at 50 MiB (+ 2 MiB multipart overhead); large videos use 40 MiB chunked upload.
+    options.Limits.MaxRequestBodySize = maxRequestBodySizeBytes;
 });
 
 var isRunningInContainer = string.Equals(

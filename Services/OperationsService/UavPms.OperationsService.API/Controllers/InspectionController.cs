@@ -3,9 +3,11 @@ using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using UavPms.OperationsService.Application.Common.Exceptions;
+using UavPms.OperationsService.Application.Features.Inspections.ChunkedUpload;
 using UavPms.OperationsService.Application.Features.Inspections.Commands.UploadImage;
 using UavPms.OperationsService.Application.Features.Inspections.Queries.GetReportById;
 using UavPms.OperationsService.Application.Features.Inspections.Queries.GetByMission;
+using UavPms.OperationsService.Domain.Interfaces.Services;
 using UavPms.Shared.Contracts.Constants;
 
 namespace UavPms.OperationsService.API.Controllers;
@@ -17,10 +19,17 @@ namespace UavPms.OperationsService.API.Controllers;
 public class InspectionController : ControllerBase
 {
     private readonly ISender _mediator;
+    private readonly IChunkedMediaUploadService? _chunkedUploadService;
+    private readonly ICurrentUserServices? _currentUser;
 
-    public InspectionController(ISender mediator)
+    public InspectionController(
+        ISender mediator,
+        IChunkedMediaUploadService? chunkedUploadService = null,
+        ICurrentUserServices? currentUser = null)
     {
         _mediator = mediator;
+        _chunkedUploadService = chunkedUploadService;
+        _currentUser = currentUser;
     }
 
     /// <summary>
@@ -55,6 +64,109 @@ public class InspectionController : ControllerBase
         var result = await _mediator.Send(command, cancellationToken);
 
         return Ok(new ApiResponse(true, "Image uploaded successfully.", result));
+    }
+
+    /// <summary>
+    /// Khởi tạo phiên upload video theo từng chunk (~40MB/chunk) để mỗi request luôn dưới 50MB
+    /// </summary>
+    [HttpPost("upload/chunks/init")]
+    [Authorize(Roles = UserRoles.AdminManagerInspector)]
+    public async Task<IActionResult> InitChunkedUpload(
+        [FromBody] InitChunkedUploadRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        if (_chunkedUploadService == null)
+            return BadRequest(new ApiResponse(false, "Chunked upload service unavailable."));
+
+        var result = await _chunkedUploadService.InitAsync(request, _currentUser?.UserId ?? Guid.Empty, cancellationToken);
+        return Ok(new ApiResponse(true, "Chunked upload session initialized.", result));
+    }
+
+    /// <summary>
+    /// Tải lên một chunk video (tối đa 40MB/chunk)
+    /// </summary>
+    [HttpPost("upload/chunks/{uploadId:guid}")]
+    [Authorize(Roles = UserRoles.AdminManagerInspector)]
+    [Consumes("multipart/form-data")]
+    public async Task<IActionResult> UploadChunk(
+        [FromRoute] Guid uploadId,
+        [FromForm] int chunkIndex,
+        IFormFile file,
+        CancellationToken cancellationToken = default)
+    {
+        if (_chunkedUploadService == null)
+            return BadRequest(new ApiResponse(false, "Chunked upload service unavailable."));
+
+        await using var stream = file?.OpenReadStream() ?? Stream.Null;
+        var result = await _chunkedUploadService.UploadChunkAsync(
+            uploadId,
+            chunkIndex,
+            stream,
+            file?.Length ?? 0,
+            _currentUser?.UserId ?? Guid.Empty,
+            cancellationToken);
+
+        return Ok(new ApiResponse(true, $"Chunk {chunkIndex} uploaded successfully.", result));
+    }
+
+    /// <summary>
+    /// Ghép toàn bộ các chunk thành video hoàn chỉnh, lưu lên MinIO và đưa vào hàng đợi AI Cloud
+    /// </summary>
+    [HttpPost("upload/chunks/{uploadId:guid}/complete")]
+    [Authorize(Roles = UserRoles.AdminManagerInspector)]
+    public async Task<IActionResult> CompleteChunkedUpload(
+        [FromRoute] Guid uploadId,
+        CancellationToken cancellationToken = default)
+    {
+        if (_chunkedUploadService == null)
+            return BadRequest(new ApiResponse(false, "Chunked upload service unavailable."));
+
+        var assembled = await _chunkedUploadService.AssembleAsync(uploadId, _currentUser?.UserId ?? Guid.Empty, cancellationToken);
+        try
+        {
+            await using var fileStream = new FileStream(
+                assembled.AssembledFilePath,
+                FileMode.Open,
+                FileAccess.Read,
+                FileShare.Read,
+                81920,
+                useAsync: true);
+
+            var command = new UploadInspectionImageCommand
+            {
+                MissionId = assembled.Manifest.MissionId,
+                TowerId = assembled.Manifest.TowerId,
+                CapturedAt = assembled.Manifest.CapturedAt,
+                Latitude = assembled.Manifest.Latitude,
+                Longitude = assembled.Manifest.Longitude,
+                FileStream = fileStream,
+                FileName = assembled.Manifest.FileName,
+                ContentType = assembled.Manifest.ContentType
+            };
+
+            var result = await _mediator.Send(command, cancellationToken);
+            return Ok(new ApiResponse(true, "Chunked media assembled and uploaded successfully.", result));
+        }
+        finally
+        {
+            await _chunkedUploadService.CleanupAsync(uploadId, cancellationToken);
+        }
+    }
+
+    /// <summary>
+    /// Hủy phiên upload chunk và xóa file tạm
+    /// </summary>
+    [HttpDelete("upload/chunks/{uploadId:guid}")]
+    [Authorize(Roles = UserRoles.AdminManagerInspector)]
+    public async Task<IActionResult> AbortChunkedUpload(
+        [FromRoute] Guid uploadId,
+        CancellationToken cancellationToken = default)
+    {
+        if (_chunkedUploadService == null)
+            return BadRequest(new ApiResponse(false, "Chunked upload service unavailable."));
+
+        await _chunkedUploadService.CleanupAsync(uploadId, cancellationToken);
+        return Ok(new ApiResponse(true, "Chunked upload session aborted and cleaned up."));
     }
 
     /// <summary>

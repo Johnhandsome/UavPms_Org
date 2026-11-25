@@ -224,6 +224,15 @@ public class MissionController : ControllerBase
         var result = await _mediator.Send(command, ct);
         return Ok(new ApiResponse(true, "Media uploaded successfully.", result));
     }
+    [HttpPost("{id:guid}/dispatch")]
+    [Authorize(Roles = UserRoles.AdminAndManager)]
+    public async Task<IActionResult> Dispatch(Guid id, [FromBody] DispatchMissionRequest? request = null, CancellationToken ct = default)
+    {
+        if (_lifecycle == null) return BadRequest(new ApiResponse(false, "Lifecycle service unavailable"));
+        var mission = await _lifecycle.DispatchMissionAsync(id, request?.Reason, ct);
+        return Ok(new ApiResponse(true, "Mission dispatched and members notified successfully", MapMissionResult(mission)));
+    }
+
     [HttpPost("{id:guid}/cancel")]
     [Authorize(Roles = UserRoles.AdminAndManager)]
     public async Task<IActionResult> Cancel(Guid id, [FromBody] CancelMissionRequest? request = null, CancellationToken ct = default)
@@ -561,6 +570,7 @@ public record MissionHandoverRequest(
     Guid? ReceivedByUserId = null,
     object? InitialChecklist = null);
 
+public record DispatchMissionRequest(string? Reason = null);
 public record ConfirmMissionRequest(string? Reason = null);
 public record SuspendMissionRequest(string Reason);
 public record ResumeMissionRequest(string? Reason = null);

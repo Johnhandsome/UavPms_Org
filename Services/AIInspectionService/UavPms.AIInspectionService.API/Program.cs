@@ -20,6 +20,17 @@ using UavPms.AIInspectionService.API.Swagger;
 
 var builder = WebApplication.CreateBuilder(args);
 
+var maxRequestBodySizeBytes = builder.Configuration.GetValue<long?>("InspectionMedia:MaxRequestBodySizeBytes")
+    ?? (52L * 1024 * 1024);
+builder.WebHost.ConfigureKestrel(options =>
+{
+    options.Limits.MaxRequestBodySize = maxRequestBodySizeBytes;
+});
+builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(options =>
+{
+    options.MultipartBodyLengthLimit = maxRequestBodySizeBytes;
+});
+
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
 {
     options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;

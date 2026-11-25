@@ -144,4 +144,95 @@ public class UserGeographicScopeTests
         var own = await handler.Handle(new GetUserGeographicScopesQuery(inspectorId), CancellationToken.None);
         own.Regions.Should().ContainSingle(r => r.RegionId == a.Id && r.Code == "A");
     }
+
+    [Fact]
+    public async Task SetScopes_ManagerManyToMany_OverlapSafe_RoleGuard_AndFailClosed_ShouldEnforceAllRules()
+    {
+        var manager1Id = Guid.NewGuid();
+        var manager2Id = Guid.NewGuid();
+        var zeroScopeManagerId = Guid.NewGuid();
+        var adminId = Guid.NewGuid();
+        var inspectorId = Guid.NewGuid();
+        var unassignedTechId = Guid.NewGuid();
+
+        var manager1Ctx = CreateUserMock(manager1Id, UserRoles.Manager);
+        var zeroManagerCtx = CreateUserMock(zeroScopeManagerId, UserRoles.Manager);
+        await using var db = CreateContext(manager1Ctx.Object);
+
+        var rAdmin = new Role { Id = 1, RoleName = UserRoles.SystemAdmin, Description = "Admin" };
+        var rManager = new Role { Id = 2, RoleName = UserRoles.Manager, Description = "Manager" };
+        var rInspector = new Role { Id = 3, RoleName = UserRoles.Inspector, Description = "Inspector" };
+        var rTech = new Role { Id = 5, RoleName = UserRoles.Technician, Description = "Technician" };
+        db.Roles.AddRange(rAdmin, rManager, rInspector, rTech);
+
+        var (regA, regB, regC) = (NewRegion("A"), NewRegion("B"), NewRegion("C"));
+        db.Regions.AddRange(regA, regB, regC);
+
+        User SeedUser(Guid id, string email, Role role)
+        {
+            var u = new User { Id = id, Email = email, FullName = email, Status = "Active" };
+            u.UserRoles.Add(new UserRole { UserId = id, RoleId = role.Id, Role = role, User = u });
+            return u;
+        }
+
+        db.Users.AddRange(
+            SeedUser(adminId, "admin@x.vn", rAdmin),
+            SeedUser(manager1Id, "m1@x.vn", rManager),
+            SeedUser(manager2Id, "m2@x.vn", rManager),
+            SeedUser(zeroScopeManagerId, "m0@x.vn", rManager),
+            SeedUser(inspectorId, "insp@x.vn", rInspector),
+            SeedUser(unassignedTechId, "tech@x.vn", rTech));
+
+        // Manager 1 owns [A, B]; Manager 2 owns [B, C] (Region B is shared by both Managers);
+        // Inspector initially has [A, C] (shared between Manager 1 and Manager 2).
+        db.UserGeographicScopes.AddRange(
+            new UserGeographicScope { Id = Guid.NewGuid(), UserId = manager1Id, RegionId = regA.Id },
+            new UserGeographicScope { Id = Guid.NewGuid(), UserId = manager1Id, RegionId = regB.Id },
+            new UserGeographicScope { Id = Guid.NewGuid(), UserId = manager2Id, RegionId = regB.Id },
+            new UserGeographicScope { Id = Guid.NewGuid(), UserId = manager2Id, RegionId = regC.Id },
+            new UserGeographicScope { Id = Guid.NewGuid(), UserId = inspectorId, RegionId = regA.Id },
+            new UserGeographicScope { Id = Guid.NewGuid(), UserId = inspectorId, RegionId = regC.Id });
+        await db.SaveChangesAsync();
+
+        var m1Set = CreateSetHandler(db, manager1Ctx.Object);
+        var m1Get = CreateGetHandler(db, manager1Ctx.Object);
+
+        // 1. Manager 1 CANNOT change scopes of SystemAdmin or co-Manager 2
+        await FluentActions.Awaiting(() => m1Set.Handle(new SetUserGeographicScopesCommand(adminId, new[] { regA.Id }), CancellationToken.None))
+            .Should().ThrowAsync<ForbiddenException>();
+        await FluentActions.Awaiting(() => m1Set.Handle(new SetUserGeographicScopesCommand(manager2Id, new[] { regB.Id }), CancellationToken.None))
+            .Should().ThrowAsync<ForbiddenException>();
+
+        // 2. Fail-Closed: Manager with 0 regions CANNOT assign or read scopes of others
+        var m0Set = CreateSetHandler(db, zeroManagerCtx.Object);
+        var m0Get = CreateGetHandler(db, zeroManagerCtx.Object);
+        await FluentActions.Awaiting(() => m0Set.Handle(new SetUserGeographicScopesCommand(unassignedTechId, new[] { regA.Id }), CancellationToken.None))
+            .Should().ThrowAsync<ForbiddenException>();
+        await FluentActions.Awaiting(() => m0Get.Handle(new GetUserGeographicScopesQuery(inspectorId), CancellationToken.None))
+            .Should().ThrowAsync<ForbiddenException>();
+
+        // 3. Manager 1 CANNOT assign Region C (outside Manager 1's scope) to unassigned Technician
+        await FluentActions.Awaiting(() => m1Set.Handle(new SetUserGeographicScopesCommand(unassignedTechId, new[] { regC.Id }), CancellationToken.None))
+            .Should().ThrowAsync<ForbiddenException>();
+
+        // 4. Manager 1 CAN assign Region A to unassigned Technician
+        var techAssigned = await m1Set.Handle(new SetUserGeographicScopesCommand(unassignedTechId, new[] { regA.Id }), CancellationToken.None);
+        techAssigned.Regions.Select(r => r.Code).Should().Equal("A");
+
+        // 5. Overlap-Safe: Manager 1 updates Inspector from [A, C] to [B] (within M1's scope: removes A, adds B) -> Region C (owned by M2) MUST be preserved in DB!
+        var updatedInspector = await m1Set.Handle(new SetUserGeographicScopesCommand(inspectorId, new[] { regB.Id }), CancellationToken.None);
+        updatedInspector.Regions.Select(r => r.Code).Should().Equal("B"); // Manager 1 sees their own accessible region B
+        var persistedInspectorRegions = await db.UserGeographicScopes
+            .Where(s => s.UserId == inspectorId && !s.IsDeleted)
+            .Select(s => s.RegionId)
+            .ToListAsync();
+        persistedInspectorRegions.Should().BeEquivalentTo(new[] { regB.Id, regC.Id });
+
+        // 6. GetUserGeographicScopes: Manager 1 can view co-Manager 2 (shares Region B), but NOT SystemAdmin
+        var m2Scopes = await m1Get.Handle(new GetUserGeographicScopesQuery(manager2Id), CancellationToken.None);
+        m2Scopes.Regions.Select(r => r.Code).Should().Equal("B"); // Manager 1 sees the shared region B
+
+        await FluentActions.Awaiting(() => m1Get.Handle(new GetUserGeographicScopesQuery(adminId), CancellationToken.None))
+            .Should().ThrowAsync<ForbiddenException>();
+    }
 }
