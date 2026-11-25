@@ -389,6 +389,9 @@ def create_gis_mission(gis_seed: dict[str, str], client: httpx.Client, role_head
         path = f'{ASSESSMENT_PATH}/{assessment["id"]}/create-mission'
         response = client.post(path, json=payload, headers=role_headers("manager"))
         assert response.status_code == 200, f"POST {path} returned {response.status_code}: {response.text}"
-        return response.json()
+        mission = response.json()
+        dispatch_res = client.post(f'/api/v1/missions/{mission["id"]}/dispatch', json={}, headers=role_headers("manager"))
+        assert dispatch_res.status_code == 200, f"POST /api/v1/missions/{mission['id']}/dispatch returned {dispatch_res.status_code}: {dispatch_res.text}"
+        return mission
 
     return create

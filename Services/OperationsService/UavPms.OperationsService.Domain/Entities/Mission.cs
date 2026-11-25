@@ -150,6 +150,18 @@ public class Mission : BaseEntity
         UpdatedAt = DateTime.UtcNow;
     }
 
+    public void Dispatch()
+    {
+        if (Status != MissionStatus.Draft)
+            throw new InvalidOperationException($"Cannot dispatch mission with status {Status}. Only Draft missions can be dispatched.");
+        if (!ActiveAssignments().Any(a => a.IsRequired))
+            throw new InvalidOperationException("Cannot dispatch a mission without at least one active required member.");
+
+        Status = MissionStatus.PendingAcceptance;
+        Version++;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
     public void Cancel()
     {
         if (Status is not (MissionStatus.Draft or MissionStatus.PendingAcceptance or MissionStatus.Confirmed or MissionStatus.Confirmed or MissionStatus.Ready or MissionStatus.Postponed or MissionStatus.Suspended))
@@ -197,7 +209,7 @@ public class Mission : BaseEntity
     /// </summary>
     public bool RecalculateReadiness()
     {
-        if (Status is MissionStatus.Cancelled or MissionStatus.Completed or MissionStatus.InProgress or MissionStatus.Suspended or MissionStatus.Postponed)
+        if (Status is MissionStatus.Draft or MissionStatus.Cancelled or MissionStatus.Completed or MissionStatus.InProgress or MissionStatus.Suspended or MissionStatus.Postponed)
             return false;
         if (StartedAt != null)
             return false;

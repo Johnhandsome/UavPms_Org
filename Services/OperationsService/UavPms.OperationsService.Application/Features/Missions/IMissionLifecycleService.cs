@@ -24,6 +24,7 @@ public interface IMissionLifecycleService
     Task CompleteAsync(Guid missionId, CancellationToken ct);
 
     // MF02 Realtime Lifecycle Methods
+    Task<Mission> DispatchMissionAsync(Guid missionId, string? reason, CancellationToken ct);
     Task<Mission> ConfirmMissionAsync(Guid missionId, string? reason, CancellationToken ct);
     Task<Mission> SuspendMissionAsync(Guid missionId, string reason, CancellationToken ct);
     Task<Mission> ResumeMissionAsync(Guid missionId, string? reason, CancellationToken ct);

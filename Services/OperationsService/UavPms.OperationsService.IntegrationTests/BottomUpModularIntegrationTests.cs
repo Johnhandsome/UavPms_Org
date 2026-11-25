@@ -310,7 +310,15 @@ public class BottomUpModularIntegrationTests
                 CancellationToken.None);
 
             missionId = mission.Id;
-            mission.Status.Should().Be(MissionStatus.PendingAcceptance);
+            mission.Status.Should().Be(MissionStatus.Draft);
+        }
+
+        // 2b. Manager dispatches mission to members -> Draft -> PendingAcceptance & notifications created
+        await using (var db = scope.CreateContext(UserContext(managerId, UserRoles.Manager)))
+        {
+            var lifecycle = new MissionLifecycleService(db, UserContext(managerId, UserRoles.Manager));
+            var dispatched = await lifecycle.DispatchMissionAsync(missionId, "Dispatching mission to field team", CancellationToken.None);
+            dispatched.Status.Should().Be(MissionStatus.PendingAcceptance);
         }
 
         await using (var db = scope.CreateContext())

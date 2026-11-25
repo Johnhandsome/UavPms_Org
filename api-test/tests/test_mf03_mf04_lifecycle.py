@@ -43,9 +43,19 @@ def test_mf03_geofence_checkin_and_mf04_detection_review_to_ticket_and_report_sn
         headers=role_headers("manager"),
     )
     assert mission_res.status_code == 200, mission_res.text
-    mission_id = mission_res.json()["id"]
+    mission_body = mission_res.json()
+    mission_id = mission_body["id"]
+    assert mission_body["status"] == "Draft"
 
-    # 1. Both required members accept -> Mission transitions PendingAcceptance -> Confirmed
+    # 1a. Manager dispatches Draft mission -> PendingAcceptance
+    dispatch_res = client.post(
+        f"/api/v1/missions/{mission_id}/dispatch",
+        json={"reason": "Dispatching E2E test mission"},
+        headers=role_headers("manager"),
+    )
+    assert dispatch_res.status_code == 200, dispatch_res.text
+
+    # 1b. Both required members accept -> Mission transitions PendingAcceptance -> Confirmed
     assert client.post(
         f"/api/v1/missions/{mission_id}/assignments/accept",
         headers=role_headers("inspector"),

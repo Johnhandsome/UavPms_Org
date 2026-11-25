@@ -125,9 +125,24 @@ internal sealed class MissionWorld
         new(assessmentId, title, null, people.ToList(), drones.ToList(), idempotencyKey,
             ConfirmationDeadline: confirmationDeadline, ManagerInstructions: "Bring spare batteries");
 
-    /// <summary>Creates a Pending Acceptance mission through the real create-mission service.</summary>
-    public Task<Mission> CreateMissionAsync(CreateMissionFromAssessmentRequest request) =>
-        WithAssessments(ManagerId, UserRoles.Manager, s => s.CreateMissionFromAssessmentAsync(request, default));
+    /// <summary>Creates a mission through the real create-mission service and optionally dispatches it to PendingAcceptance.</summary>
+    public async Task<Mission> CreateMissionAsync(CreateMissionFromAssessmentRequest request, bool dispatch = true)
+    {
+        var mission = await WithAssessments(ManagerId, UserRoles.Manager, s => s.CreateMissionFromAssessmentAsync(request, default));
+        if (dispatch && mission.Status == MissionStatus.Draft)
+        {
+            try
+            {
+                mission = await AsManager(s => s.DispatchMissionAsync(mission.Id, null, default));
+            }
+            catch (UavPms.OperationsService.Application.Common.Exceptions.BusinessRuleException ex) when (ex.Code == "INVALID_MISSION_STATE")
+            {
+                // A concurrent idempotent call already dispatched this mission.
+                mission = await LoadMissionAsync(mission.Id);
+            }
+        }
+        return mission;
+    }
 
     /// <summary>Assessment + mission over [start, end) with one required inspector (and optional extra people).</summary>
     public async Task<Mission> CreateMissionAsync(DateTime start, DateTime end, Guid inspectorId, Guid droneId, params MissionPersonnelAssignmentRequest[] extra)

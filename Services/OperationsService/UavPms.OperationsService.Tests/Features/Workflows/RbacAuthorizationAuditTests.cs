@@ -114,5 +114,8 @@ public class RbacAuthorizationAuditTests
 
         GetRoles(typeof(MaintenanceTicketController), nameof(MaintenanceTicketController.GetMyTickets))
             .Should().BeEquivalentTo(new[] { UserRoles.Technician });
+
+        GetRoles(typeof(MissionController), nameof(MissionController.Dispatch))
+            .Should().BeEquivalentTo(new[] { UserRoles.SystemAdmin, UserRoles.Manager });
     }
 }

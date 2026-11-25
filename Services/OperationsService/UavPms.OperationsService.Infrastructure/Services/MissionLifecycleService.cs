@@ -914,6 +914,66 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
         return targetAssignment;
     }
 
+    public async Task<Mission> DispatchMissionAsync(Guid missionId, string? reason, CancellationToken ct)
+    {
+        await RequireActiveCaller(ct);
+        var mission = await ManagedMission(missionId, ct, true);
+
+        try
+        {
+            mission.Dispatch();
+        }
+        catch (InvalidOperationException ex)
+        {
+            throw new BusinessRuleException("INVALID_MISSION_STATE", ex.Message);
+        }
+
+        Audit(mission.Id, "MISSION_DISPATCHED");
+        var activeMembers = mission.ActiveAssignments().ToList();
+        foreach (var member in activeMembers)
+        {
+            NotifyOnce(new[] { member.UserId }, mission, "MISSION_DISPATCH", member.AssignmentRole);
+        }
+
+        var note = string.IsNullOrWhiteSpace(reason)
+            ? "Quản lý đã phát hành nhiệm vụ và gửi thông báo xác nhận tới các thành viên."
+            : $"Quản lý đã phát hành nhiệm vụ: {reason.Trim()}";
+        _db.MissionCommunicationLogs.Add(new MissionCommunicationLog
+        {
+            Id = Guid.NewGuid(),
+            MissionId = mission.Id,
+            SenderId = _current.UserId,
+            Type = "DISPATCH",
+            Content = note,
+            CreatedAt = DateTime.UtcNow
+        });
+
+        await SaveConcurrency(ct);
+
+        if (_notifier != null)
+        {
+            await _notifier.NotifyAsync(new UavPms.Shared.Contracts.Events.MissionLifecycleEventDto
+            {
+                MissionId = mission.Id.ToString(),
+                MissionCode = mission.MissionCode,
+                MissionTitle = mission.Title,
+                Type = "DISPATCHED",
+                Status = mission.Status.ToString(),
+                ActorRole = "MANAGER",
+                ActorId = _current.UserId.ToString(),
+                ActorName = _current.Username ?? "Manager",
+                ManagerId = mission.ManagerId.ToString(),
+                InspectorId = mission.PrimaryInspectorId()?.ToString() ?? string.Empty,
+                AssignedUserIds = activeMembers.Select(a => a.UserId.ToString()).Distinct().ToList(),
+                Reason = reason,
+                Message = note,
+                Timestamp = DateTime.UtcNow
+            }, ct);
+        }
+
+        return mission;
+    }
+
     public async Task<Mission> PostponeMissionAsync(Guid missionId, string reason, CancellationToken ct)
     {
         await RequireActiveCaller(ct);

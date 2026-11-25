@@ -34,7 +34,7 @@ public class MissionCreationFromAssessmentTests
     }
 
     [Fact]
-    public async Task CreateMissionFromAssessment_CreatesPendingAcceptanceWithBookingsAndOutbox()
+    public async Task CreateMissionFromAssessment_CreatesDraftWithBookingsAndOutbox_AndDispatchTransitionsToPendingAcceptance()
     {
         var managerId = Guid.NewGuid();
         var inspectorId = Guid.NewGuid();
@@ -87,7 +87,7 @@ public class MissionCreationFromAssessmentTests
         var mission = await service.CreateMissionFromAssessmentAsync(request, CancellationToken.None);
 
         mission.Should().NotBeNull();
-        mission.Status.Should().Be(MissionStatus.PendingAcceptance);
+        mission.Status.Should().Be(MissionStatus.Draft);
         mission.PreMissionAssessmentId.Should().Be(assessment.Id);
         mission.UavId.Should().Be(drone.Id);
         mission.Assignments.Should().HaveCount(1);
@@ -108,6 +108,15 @@ public class MissionCreationFromAssessmentTests
         var outbox = await db.OutboxMessages.FirstOrDefaultAsync(x => x.MessageType == "MissionCreatedFromAssessment");
         outbox.Should().NotBeNull();
         outbox!.Payload.Should().Contain("Inspection Mission 101");
+
+        // No dispatch notification sent while still in Draft
+        (await db.Notifications.CountAsync(n => n.ReferenceId == mission.Id && n.Type == "MISSION_DISPATCH")).Should().Be(0);
+
+        // Manager explicitly dispatches mission -> Draft -> PendingAcceptance & notifies assigned members
+        var lifecycle = new MissionLifecycleService(db, user.Object);
+        var dispatched = await lifecycle.DispatchMissionAsync(mission.Id, "Ready for field confirmation", CancellationToken.None);
+        dispatched.Status.Should().Be(MissionStatus.PendingAcceptance);
+        (await db.Notifications.CountAsync(n => n.ReferenceId == mission.Id && n.Type == "MISSION_DISPATCH")).Should().Be(1);
     }
 
     [Fact]
